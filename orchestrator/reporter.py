@@ -29,7 +29,11 @@ def print_final_summary(coverage_summary: dict) -> None:
 
     console = Console()
     console.print("\n[bold cyan]═══════════════════ PURPLEFORGE RESULTS ═══════════════════[/bold cyan]")
-    console.print(f"\n[bold]Overall coverage: {coverage_summary['coverage_percent']}%[/bold]\n")
+    windowed = coverage_summary['coverage_percent']
+    ever = coverage_summary['coverage_percent_ever_detected']
+    window = coverage_summary['coverage_window_rounds']
+    console.print(f"\n[bold]Windowed coverage (last {window} rounds): {windowed}%[/bold]")
+    console.print(f"[dim]Ever detected (legacy metric): {ever}%[/dim]\n")
 
     table = Table(show_header=True, header_style="bold magenta")
     table.add_column("Technique ID", style="dim")

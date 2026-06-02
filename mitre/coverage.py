@@ -2,8 +2,11 @@ from dataclasses import dataclass, field
 from typing import Literal
 from .techniques import TECHNIQUES
 
-
 DetectionStatus = Literal["uncovered", "detected", "evaded"]
+
+# A technique counts as "covered" only if detected in this many of the last N rounds
+COVERAGE_WINDOW = 3       # look at last N rounds
+COVERAGE_THRESHOLD = 0.5  # must be detected in >= 50% of those rounds
 
 
 @dataclass
@@ -16,12 +19,17 @@ class TechniqueRecord:
     rounds_evaded: int = 0
     rules_generated: int = 0
     last_status: DetectionStatus = "uncovered"
+    # Per-round detection history: True = detected, False = evaded
+    history: list[bool] = field(default_factory=list)
 
 
 class CoverageMatrix:
     """
     Tracks per-technique detection history across all rounds.
-    The output of this class is the heatmap data for the dashboard.
+
+    Coverage is windowed: a technique counts as "covered" only if it was
+    detected in >= COVERAGE_THRESHOLD of the last COVERAGE_WINDOW rounds.
+    This prevents the metric from permanently inflating after one detection.
     """
 
     def __init__(self, technique_ids: list[str]):
@@ -46,6 +54,7 @@ class CoverageMatrix:
                 continue
             rec = self.records[tid]
             rec.rounds_injected += 1
+            rec.history.append(detected)
             if detected:
                 rec.rounds_detected += 1
                 rec.last_status = "detected"
@@ -59,8 +68,25 @@ class CoverageMatrix:
         if technique_id in self.records:
             self.records[technique_id].rules_generated += 1
 
+    def _is_covered(self, rec: TechniqueRecord) -> bool:
+        """
+        A technique is 'covered' if detected in >= COVERAGE_THRESHOLD
+        of the last COVERAGE_WINDOW rounds. Requires at least 1 round injected.
+        """
+        if not rec.history:
+            return False
+        window = rec.history[-COVERAGE_WINDOW:]
+        return (sum(window) / len(window)) >= COVERAGE_THRESHOLD
+
     def coverage_percent(self) -> float:
-        """Techniques with at least one detection / total techniques."""
+        """Windowed coverage: % of techniques meeting the detection threshold."""
+        if not self.records:
+            return 0.0
+        covered = sum(1 for r in self.records.values() if self._is_covered(r))
+        return round(covered / len(self.records) * 100, 1)
+
+    def coverage_percent_ever(self) -> float:
+        """Legacy metric: % ever detected at least once. Kept for comparison."""
         if not self.records:
             return 0.0
         covered = sum(1 for r in self.records.values() if r.rounds_detected > 0)
@@ -69,6 +95,9 @@ class CoverageMatrix:
     def summary(self) -> dict:
         return {
             "coverage_percent": self.coverage_percent(),
+            "coverage_percent_ever_detected": self.coverage_percent_ever(),
+            "coverage_window_rounds": COVERAGE_WINDOW,
+            "coverage_threshold": COVERAGE_THRESHOLD,
             "techniques": {
                 tid: {
                     "name": r.name,
@@ -78,6 +107,8 @@ class CoverageMatrix:
                     "evaded": r.rounds_evaded,
                     "rules_generated": r.rules_generated,
                     "status": r.last_status,
+                    "covered": self._is_covered(r),
+                    "detection_rate": round(r.rounds_detected / r.rounds_injected, 2) if r.rounds_injected else 0,
                 }
                 for tid, r in self.records.items()
             },

@@ -119,9 +119,12 @@ class Orchestrator:
             console.print(f"  Waiting {self.indexing_wait}s for Splunk to index events...")
             time.sleep(self.indexing_wait)
 
-            # Use Unix epoch timestamp for earliest — Splunk REST requires this format
+            # Scope search to this round's injection window only.
+            # Using epoch timestamps — the only format Splunk REST accepts reliably.
             earliest = str(int(round_start.timestamp()))
             latest = "now"
+            # Also pass the round number so rules can optionally filter by arena_round
+            self._current_round = round_num
 
             # ── 3. Blue detects ─────────────────────────────────────────────
             console.print("[bold blue]● BLUE AGENT — running detection rules[/bold blue]")
@@ -147,6 +150,7 @@ class Orchestrator:
                 new_rules = self.blue.generate_rules_for_misses(
                     missed_techniques=missed_events,
                     round_num=round_num,
+                    red_mutations=self.red.get_current_overrides(),
                 )
                 for tid in misses:
                     self.coverage.record_rule_generated(tid)

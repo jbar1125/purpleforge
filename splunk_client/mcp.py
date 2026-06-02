@@ -36,21 +36,31 @@ class MCPClient:
 
     def is_available(self) -> bool:
         """
-        Check if the MCP Server app is responding.
-        Uses a lightweight REST ping rather than the full JSON-RPC handshake.
+        Check if the MCP Server app is responding using the proper
+        JSON-RPC 2.0 initialize handshake (POST, not GET).
+        Any non-exception response means the app is loaded.
         """
         if self._available is None:
             try:
-                import urllib3
-                urllib3.disable_warnings()
-                resp = requests.get(
+                payload = {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {},
+                        "clientInfo": {"name": "purpleforge", "version": "1.0"},
+                    },
+                }
+                resp = requests.post(
                     self.endpoint,
+                    json=payload,
                     headers=self.headers,
                     verify=self.verify,
                     timeout=5,
                 )
-                # Only treat 200 as available; 401 = bad token, fall back to REST
-                self._available = resp.status_code == 200
+                # 200 or 400 both mean the app is alive; 401 = bad token (fall back)
+                self._available = resp.status_code in (200, 400, 405)
             except Exception:
                 self._available = False
         return self._available
@@ -115,8 +125,8 @@ class MCPClient:
         )
 
     @classmethod
-    def disabled() -> "MCPClient":
+    def disabled(cls) -> "MCPClient":
         """Return a client that always reports itself as unavailable."""
-        c = object.__new__(MCPClient)
+        c = object.__new__(cls)
         c._available = False
         return c

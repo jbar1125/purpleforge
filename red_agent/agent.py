@@ -60,6 +60,10 @@ class RedAgent:
             injected[tid] = events
         return injected
 
+    def get_current_overrides(self) -> dict[str, dict]:
+        """Return the current mutation overrides so blue knows what red changed."""
+        return dict(self._overrides)
+
     def receive_catching_rule(self, technique_id: str, rule_spl: str) -> None:
         """
         Called by the orchestrator when blue detects an attack.

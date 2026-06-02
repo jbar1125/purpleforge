@@ -20,6 +20,9 @@ _SAMPLE_PROCS = [
 ]
 _SAMPLE_REG_KEYS = ["SyncHelper", "UpdateAgent", "WinDefender", "AudioService"]
 
+# Spec-level keys that control injection behavior — not injected as event fields
+_SPEC_KEYS = {"count", "spread_seconds"}
+
 
 def _fill_template(template: dict) -> dict:
     """Replace {placeholder} strings in a template dict with realistic values."""
@@ -45,6 +48,9 @@ class Injector:
     """
     Instantiates attack templates and injects events into Splunk via HEC.
     Each event gets arena_round and technique_id fields for scoring.
+
+    Timestamps: _time is set per-event and promoted to the HEC envelope
+    by HECClient so Splunk stores the correct per-event timestamp.
     """
 
     def __init__(self, hec: HECClient, index: str):
@@ -59,7 +65,9 @@ class Injector:
     ) -> list[dict]:
         """
         Inject all events for a technique definition.
-        overrides: field overrides from the mutator (LLM-suggested evasions).
+        overrides: field overrides from the mutator.
+          - Spec-level keys (count, spread_seconds) adjust injection behavior.
+          - All other keys are merged into the event template fields.
         Returns the list of injected events (for scoring reference).
         """
         overrides = overrides or {}
@@ -68,22 +76,28 @@ class Injector:
 
         now = time.time()
 
+        # Separate spec-level overrides from field-level overrides
+        spec_overrides = {k: v for k, v in overrides.items() if k in _SPEC_KEYS}
+        field_overrides = {k: v for k, v in overrides.items() if k not in _SPEC_KEYS}
+
         for event_spec in technique_def["events"]:
             sourcetype = event_spec["sourcetype"]
             template = copy.deepcopy(event_spec["template"])
 
-            # Apply LLM-suggested overrides before filling placeholders
-            template.update(overrides)
+            # Apply field-level LLM overrides before filling placeholders
+            template.update(field_overrides)
 
-            count = event_spec.get("count", 1)
-            spread = event_spec.get("spread_seconds", 1)
+            # Spec-level overrides can change count and timing
+            count = spec_overrides.get("count", event_spec.get("count", 1))
+            spread = spec_overrides.get("spread_seconds", event_spec.get("spread_seconds", 1))
 
             events_to_send = []
             for i in range(count):
                 ev = _fill_template(template)
                 ev["arena_round"] = round_num
                 ev["arena_technique"] = technique_id
-                # Spread events backwards in time so they look like a real burst
+                # Spread events backwards in time to simulate a real attack burst.
+                # _time is promoted to the outer HEC envelope by HECClient.
                 ev["_time"] = now - (spread * (count - i) / max(count, 1))
                 events_to_send.append(ev)
 
