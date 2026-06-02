@@ -14,7 +14,18 @@ Rules for your response:
 - The SPL must search index=arena_attacks
 - The SPL must end with: | eval technique="{technique_id}", rule_name="{rule_name}"
 - Write the narrowest rule that catches the attack without matching normal activity
-- No markdown, no code fences, no text outside the JSON"""
+- No markdown, no code fences, no text outside the JSON
+
+EXAMPLES OF VALID RULES:
+
+Example 1 — Brute Force with low threshold:
+{{"spl": "index=arena_attacks EventCode=4625 | bucket _time span=10m | stats count by Source_Network_Address, _time | where count >= 5 | eval technique=\\"T1110.001\\", rule_name=\\"generated_r2_T1110_001\\"", "explanation": "Detects 5+ failed logins from same IP in a 10-minute window"}}
+
+Example 2 — LSASS dump by suspicious process:
+{{"spl": "index=arena_attacks EventCode=10 TargetImage=\\"*lsass.exe\\" NOT (SourceImage=\\"*svchost.exe\\" OR SourceImage=\\"*MsMpEng.exe\\") | eval technique=\\"T1003.001\\", rule_name=\\"generated_r1_T1003_001\\"", "explanation": "Catches non-system processes opening a handle to lsass.exe"}}
+
+Example 3 — RDP from unexpected source using stats:
+{{"spl": "index=arena_attacks EventCode=4624 Logon_Type=10 | stats count by Source_Network_Address | where count >= 1 | eval technique=\\"T1021.001\\", rule_name=\\"generated_r3_T1021_001\\"", "explanation": "Detects any RDP logon from a recorded source address"}}"""
 
 USER_PROMPT_TEMPLATE = """
 TECHNIQUE: {technique_id} — {technique_name}
@@ -172,10 +183,10 @@ class Generator:
             urllib3.disable_warnings()
 
             # Use the parse endpoint — syntax check only, no data scanned
-            resp = requests.get(
+            resp = requests.post(
                 f"{self.search.base}/services/search/parser",
                 auth=self.search.auth,
-                params={"q": f"search {spl}", "output_mode": "json"},
+                data={"q": f"search {spl}", "output_mode": "json"},
                 verify=self.search.verify,
                 timeout=10,
             )

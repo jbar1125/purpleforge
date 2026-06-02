@@ -19,7 +19,7 @@
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["TargetObject", "reg_key_name", "malicious_command", "setting_process"],
+    "evadable_fields": ["TargetObject", "Details", "Image"],
     "objective": "Persist via registry run key to survive reboots"
   }
 }

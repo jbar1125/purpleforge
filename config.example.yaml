@@ -24,7 +24,8 @@ llm:
     model: gemini-2.0-flash
 
   ollama:
-    model: llama3.1      # run: ollama pull llama3.1
+    model: qwen2.5:3b    # faster, lower RAM; run: ollama pull qwen2.5:3b
+    # model: llama3.1    # larger, slower; run: ollama pull llama3.1
     base_url: http://localhost:11434
 
   splunk_hosted:

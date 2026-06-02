@@ -12,7 +12,7 @@ class OllamaClient(LLMClient):
         self.model = model
         self.base_url = base_url.rstrip("/")
 
-    def complete(self, system_prompt: str, user_prompt: str) -> str:
+    def _chat(self, system_prompt: str, user_prompt: str, json_mode: bool = False) -> str:
         payload = {
             "model": self.model,
             "messages": [
@@ -21,6 +21,15 @@ class OllamaClient(LLMClient):
             ],
             "stream": False,
         }
-        resp = requests.post(f"{self.base_url}/api/chat", json=payload, timeout=120)
+        if json_mode:
+            payload["format"] = "json"  # Ollama native JSON mode
+        resp = requests.post(f"{self.base_url}/api/chat", json=payload, timeout=300)
         resp.raise_for_status()
         return resp.json()["message"]["content"].strip()
+
+    def complete(self, system_prompt: str, user_prompt: str) -> str:
+        return self._chat(system_prompt, user_prompt)
+
+    def complete_json(self, system_prompt: str, user_prompt: str) -> str:
+        """Use Ollama's native JSON mode — guarantees valid JSON output."""
+        return self._chat(system_prompt, user_prompt, json_mode=True)

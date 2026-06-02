@@ -30,7 +30,7 @@
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["TaskName", "malicious_command", "Account_Name"],
+    "evadable_fields": ["TaskName", "Account_Name", "ImagePath"],
     "objective": "Maintain persistence via scheduled task"
   }
 }

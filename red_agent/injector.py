@@ -23,6 +23,10 @@ _SAMPLE_REG_KEYS = ["SyncHelper", "UpdateAgent", "WinDefender", "AudioService"]
 # Spec-level keys that control injection behavior — not injected as event fields
 _SPEC_KEYS = {"count", "spread_seconds"}
 
+# Hard caps on mutation ranges — prevent trivially cheating the detection window
+_MAX_COUNT = 200          # cap injected events per spec
+_MAX_SPREAD_SECONDS = 90  # cap timing spread so events stay within the round window
+
 
 def _fill_template(template: dict) -> dict:
     """Replace {placeholder} strings in a template dict with realistic values."""
@@ -87,9 +91,9 @@ class Injector:
             # Apply field-level LLM overrides before filling placeholders
             template.update(field_overrides)
 
-            # Spec-level overrides can change count and timing
-            count = spec_overrides.get("count", event_spec.get("count", 1))
-            spread = spec_overrides.get("spread_seconds", event_spec.get("spread_seconds", 1))
+            # Spec-level overrides can change count and timing (capped to prevent cheating the window)
+            count = min(int(spec_overrides.get("count", event_spec.get("count", 1))), _MAX_COUNT)
+            spread = min(float(spec_overrides.get("spread_seconds", event_spec.get("spread_seconds", 1))), _MAX_SPREAD_SECONDS)
 
             events_to_send = []
             for i in range(count):

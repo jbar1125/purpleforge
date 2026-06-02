@@ -19,7 +19,7 @@
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["GrantedAccess", "dumper_process", "CallTrace"],
+    "evadable_fields": ["GrantedAccess", "SourceImage", "CallTrace"],
     "objective": "Read LSASS memory to extract credential hashes"
   }
 }

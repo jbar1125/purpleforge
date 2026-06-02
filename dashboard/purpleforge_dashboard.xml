@@ -1,31 +1,32 @@
 <?xml version="1.0"?>
 <dashboard version="1.1" theme="dark">
   <label>PurpleForge — Adversarial Detection Arena</label>
-  <description>Live coverage tracking for the PurpleForge red/blue agent simulation</description>
+  <description>Live red vs. blue agent simulation. Red injects MITRE ATT&amp;CK attacks. Blue detects and auto-generates SPL rules. Coverage improves each round.</description>
 
-  <!-- Row 1: KPI tiles -->
+  <!-- ═══════════ Row 1: KPI Tiles ═══════════ -->
   <row>
     <panel>
       <single>
-        <title>Techniques Covered</title>
+        <title>Windowed Coverage %</title>
         <search>
-          <query>index=arena_attacks arena_round=* | stats dc(arena_technique) as covered | eval total=6 | eval label=covered." / ".total</query>
-          <earliest>-24h</earliest>
+          <query>index=arena_attacks sourcetype="purpleforge:summary" | stats max(round) as latest_round | appendcols [search index=arena_attacks sourcetype="purpleforge:summary" | stats max(eval(round)) as r | join r [search index=arena_attacks sourcetype="purpleforge:summary" | eval r=round | stats max(coverage_pct) as coverage_pct by r | sort -r | head 1]] | table coverage_pct</query>
+          <earliest>-7d</earliest>
           <latest>now</latest>
         </search>
-        <option name="field">label</option>
-        <option name="colorBy">value</option>
+        <option name="field">coverage_pct</option>
+        <option name="unit">%</option>
         <option name="useColors">1</option>
         <option name="colorMode">block</option>
-        <option name="rangeColors">["0x65A637","0xF8BE34","0xD41F1F"]</option>
+        <option name="rangeColors">["0xD41F1F","0xF8BE34","0x65A637"]</option>
+        <option name="rangeValues">[33,66]</option>
       </single>
     </panel>
     <panel>
       <single>
-        <title>Total Rounds Run</title>
+        <title>Total Rounds Completed</title>
         <search>
-          <query>index=arena_attacks | stats max(arena_round) as rounds</query>
-          <earliest>-24h</earliest>
+          <query>index=arena_attacks sourcetype="purpleforge:summary" | stats max(round) as rounds</query>
+          <earliest>-7d</earliest>
           <latest>now</latest>
         </search>
         <option name="field">rounds</option>
@@ -33,98 +34,158 @@
     </panel>
     <panel>
       <single>
-        <title>Total Events Injected</title>
+        <title>Attack Events Injected</title>
         <search>
-          <query>index=arena_attacks | stats count</query>
-          <earliest>-24h</earliest>
+          <query>index=arena_attacks NOT sourcetype="purpleforge:summary" | stats count</query>
+          <earliest>-7d</earliest>
           <latest>now</latest>
         </search>
         <option name="field">count</option>
       </single>
     </panel>
+    <panel>
+      <single>
+        <title>Techniques in Play</title>
+        <search>
+          <query>index=arena_attacks NOT sourcetype="purpleforge:summary" | stats dc(arena_technique) as t</query>
+          <earliest>-7d</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="field">t</option>
+      </single>
+    </panel>
   </row>
 
-  <!-- Row 2: Per-technique detection heatmap (table) -->
+  <!-- ═══════════ Row 2: Coverage Over Time ═══════════ -->
   <row>
     <panel>
-      <title>MITRE ATT&amp;CK Coverage Heatmap — Technique × Round</title>
+      <title>Detection Coverage % — Round by Round</title>
+      <chart>
+        <search>
+          <query>index=arena_attacks sourcetype="purpleforge:summary" | stats max(coverage_pct) as coverage by round | sort round | eval round_label="Round ".round</query>
+          <earliest>-7d</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">line</option>
+        <option name="charting.axisTitleX.text">Round</option>
+        <option name="charting.axisTitleY.text">Coverage %</option>
+        <option name="charting.axisTitleY.visibility">visible</option>
+        <option name="charting.chart.nullValueMode">connect</option>
+        <option name="charting.legend.placement">none</option>
+        <option name="charting.lineWidth">3</option>
+        <option name="charting.seriesColors">["0x00c176"]</option>
+        <option name="charting.axisY.minimumNumber">0</option>
+        <option name="charting.axisY.maximumNumber">100</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Detected vs Missed Per Round</title>
+      <chart>
+        <search>
+          <query>index=arena_attacks sourcetype="purpleforge:summary" | stats max(detected_count) as Detected max(missed_count) as Missed by round | sort round</query>
+          <earliest>-7d</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.seriesColors">["0x00c176","0xe60d0d"]</option>
+        <option name="charting.axisTitleX.text">Round</option>
+        <option name="charting.axisTitleY.text">Techniques</option>
+        <option name="charting.legend.placement">bottom</option>
+      </chart>
+    </panel>
+  </row>
+
+  <!-- ═══════════ Row 3: Technique × Round Heatmap ═══════════ -->
+  <row>
+    <panel>
+      <title>ATT&amp;CK Technique Detection — Per Round Status</title>
       <table>
         <search>
           <query>
-index=arena_attacks
-| table arena_round, arena_technique, EventCode
+index=arena_attacks NOT sourcetype="purpleforge:summary"
 | stats count by arena_round, arena_technique
-| eval status=if(count>0,"detected","missed")
+| eval status=if(count>0,"INJECTED","–")
 | table arena_round, arena_technique, status, count
-| sort arena_round, arena_technique
+| rename arena_round as Round, arena_technique as Technique, count as "Events Injected"
+| sort Round, Technique
           </query>
-          <earliest>-24h</earliest>
+          <earliest>-7d</earliest>
           <latest>now</latest>
         </search>
-        <option name="count">20</option>
+        <option name="count">50</option>
         <format type="color" field="status">
-          <colorPalette type="map">{"detected": #1a9641, "missed": #d7191c}</colorPalette>
+          <colorPalette type="map">{"INJECTED": #00c176, "MISSED": #e60d0d, "–": #666666}</colorPalette>
         </format>
       </table>
     </panel>
   </row>
 
-  <!-- Row 3: Attack timeline + rule inventory -->
+  <!-- ═══════════ Row 4: Attack Timeline + Event Feed ═══════════ -->
   <row>
     <panel>
-      <title>Attack Injection Timeline</title>
+      <title>Attack Injection Timeline by Technique</title>
       <chart>
         <search>
           <query>
-index=arena_attacks
-| timechart span=1m count by arena_technique
+index=arena_attacks NOT sourcetype="purpleforge:summary"
+| timechart span=2m count by arena_technique
           </query>
-          <earliest>-24h</earliest>
+          <earliest>-7d</earliest>
           <latest>now</latest>
         </search>
         <option name="charting.chart">column</option>
         <option name="charting.chart.stackMode">stacked</option>
         <option name="charting.legend.placement">bottom</option>
         <option name="charting.axisTitleX.text">Time</option>
-        <option name="charting.axisTitleY.text">Event Count</option>
+        <option name="charting.axisTitleY.text">Events</option>
       </chart>
     </panel>
     <panel>
-      <title>Events Per Technique Per Round</title>
-      <chart>
-        <search>
-          <query>
-index=arena_attacks
-| stats count by arena_round, arena_technique
-| eval label=arena_technique." (R".arena_round.")"
-| chart sum(count) over arena_technique by arena_round
-          </query>
-          <earliest>-24h</earliest>
-          <latest>now</latest>
-        </search>
-        <option name="charting.chart">bar</option>
-      </chart>
-    </panel>
-  </row>
-
-  <!-- Row 4: Recent injected events raw feed -->
-  <row>
-    <panel>
-      <title>Recent Injected Events (arena_attacks)</title>
+      <title>Round Summaries (Blue Agent Perspective)</title>
       <table>
         <search>
           <query>
-index=arena_attacks
-| table _time, arena_round, arena_technique, sourcetype, EventCode, Account_Name, Source_Network_Address
-| sort -_time
-| head 50
+index=arena_attacks sourcetype="purpleforge:summary"
+| eval coverage_pct=coverage_pct."%"
+| table round, coverage_pct, detected_count, missed_count, detected_techniques, missed_techniques
+| rename round as Round, coverage_pct as "Coverage", detected_count as "Detected", missed_count as "Missed", detected_techniques as "Detected Techniques", missed_techniques as "Missed Techniques"
+| sort Round
           </query>
-          <earliest>-24h</earliest>
+          <earliest>-7d</earliest>
           <latest>now</latest>
         </search>
         <option name="count">20</option>
         <option name="wrap">true</option>
+        <format type="color" field="Detected">
+          <colorPalette type="minMidMax" minColor="#e60d0d" maxColor="#00c176"/>
+        </format>
+        <format type="color" field="Missed">
+          <colorPalette type="minMidMax" minColor="#00c176" maxColor="#e60d0d"/>
+        </format>
       </table>
     </panel>
   </row>
+
+  <!-- ═══════════ Row 5: Raw Event Feed ═══════════ -->
+  <row>
+    <panel>
+      <title>Recent Injected Attack Events</title>
+      <table>
+        <search>
+          <query>
+index=arena_attacks NOT sourcetype="purpleforge:summary"
+| table _time, arena_round, arena_technique, sourcetype, EventCode, Account_Name, Source_Network_Address, TargetImage, GrantedAccess
+| sort -_time
+| head 100
+          </query>
+          <earliest>-7d</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="count">20</option>
+        <option name="wrap">false</option>
+      </table>
+    </panel>
+  </row>
+
 </dashboard>

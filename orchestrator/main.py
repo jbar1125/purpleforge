@@ -33,6 +33,8 @@ from mitre.coverage import CoverageMatrix
 from mitre.techniques import TECHNIQUES
 from orchestrator.scorer import score_round
 from orchestrator.reporter import save_report, print_final_summary
+from mitre.navigator import export_navigator_layer
+from orchestrator.checkpoint import Checkpoint
 
 console = Console()
 
@@ -91,6 +93,7 @@ class Orchestrator:
         self.indexing_wait = arena.get("indexing_wait_seconds", 4)
         self.index_attacks = sc["index_attacks"]
         self.round_logs = []
+        self.checkpoint = Checkpoint(self.cfg)
 
     def _ensure_indexes(self) -> None:
         console.print("[dim]Ensuring Splunk indexes exist...[/dim]")
@@ -169,22 +172,50 @@ class Orchestrator:
             # ── 7. Update coverage matrix ────────────────────────────────────
             self.coverage.record_round(round_num=round_num, results=detected)
 
-            # ── 8. Log round ─────────────────────────────────────────────────
+            # ── 8. Log round + inject summary event ──────────────────────────
+            cov = self.coverage.coverage_percent()
             round_log = {
                 "round": round_num,
                 "detected": hits,
                 "missed": misses,
                 "catching_rules": catching_rules,
-                "coverage_after_round": self.coverage.coverage_percent(),
+                "coverage_after_round": cov,
             }
             self.round_logs.append(round_log)
-            console.print(f"  Coverage after round {round_num}: [bold]{self.coverage.coverage_percent()}%[/bold]")
+            self.checkpoint.save_round(
+                round_num=round_num,
+                injected=injected,
+                detected=detected,
+                catching_rules=catching_rules,
+                coverage=cov,
+                mutations=self.red.get_current_overrides(),
+            )
+            # Inject a summary event so the Splunk dashboard can track coverage over rounds
+            summary_event = {
+                "event_type": "purpleforge_round_summary",
+                "round": round_num,
+                "coverage_pct": cov,
+                "detected_count": len(hits),
+                "missed_count": len(misses),
+                "detected_techniques": ",".join(hits),
+                "missed_techniques": ",".join(misses),
+                "rules_fired": len([r for r, rows in detection_results.items() if rows]),
+            }
+            self.hec.send_events([summary_event], index=self.index_attacks, sourcetype="purpleforge:summary")
+            console.print(f"  Coverage after round {round_num}: [bold]{cov}%[/bold]")
 
         # ── Final report ─────────────────────────────────────────────────────
         summary = self.coverage.summary()
         print_final_summary(summary)
         path = save_report(summary, self.round_logs)
         console.print(f"\n[dim]Full report saved: {path}[/dim]")
+        # Export ATT&CK Navigator layer for visual coverage heatmap
+        results_dir = str(Path(__file__).parent.parent / "results")
+        nav_path = export_navigator_layer(summary, output_dir=results_dir)
+        console.print(f"[dim]ATT&CK Navigator layer: {nav_path}[/dim]")
+        console.print("[dim]  -> Open at https://mitre-attack.github.io/attack-navigator/ (Upload from URL or file)[/dim]")
+        self.checkpoint.mark_complete()
+        self.checkpoint.close()
 
 
 if __name__ == "__main__":

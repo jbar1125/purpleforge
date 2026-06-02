@@ -29,7 +29,7 @@
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["new_account", "creating_user", "Group_Name"],
+    "evadable_fields": ["Account_Name", "Subject_Account_Name", "Group_Name", "Workstation_Name"],
     "objective": "Create a backdoor local account with admin privileges"
   }
 }

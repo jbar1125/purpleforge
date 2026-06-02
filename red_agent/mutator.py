@@ -10,6 +10,7 @@ Hard rules:
 - Do NOT change TargetImage for process injection techniques
 - Only change: timing (count, spread_seconds), source fields (IP, username variation),
   threshold-adjacent values, or alternative but equivalent field values
+- count must be between 1 and 200; spread_seconds must be between 1 and 90
 - Every key you return must already exist in the template's evadable_fields list
 - Return ONLY a valid JSON object with the changed fields and their new values
 - No explanation, no markdown, no extra text"""
