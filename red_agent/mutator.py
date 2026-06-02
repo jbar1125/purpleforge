@@ -19,18 +19,19 @@ USER_PROMPT_TEMPLATE = """
 Detection rule catching this attack (SPL):
 {catching_rule}
 
-Attack template (study the structure):
+Attack template (for context only — do NOT return top-level keys like "events" or "mutation_hints"):
 {technique_json}
 
-Fields you are ALLOWED to change (from mutation_hints.evadable_fields):
+Fields you are ALLOWED to change (these are event field names, not template structure keys):
 {evadable_fields}
 
 Attack objective (must be preserved):
 {objective}
 
-Return a JSON object changing ONLY fields from the evadable_fields list above.
-The mutation must make the attack evade the SPL rule while still achieving the objective.
-Example: {{"count": 3, "spread_seconds": 7200}}
+Return a JSON object with ONLY field names from the list above and their new values.
+These are event-level fields injected into Splunk — NOT keys from the template structure.
+Example: {{"count": 3, "spread_seconds": 60}}
+Example: {{"GrantedAccess": "0x1038", "SourceImage": "C:\\\\Windows\\\\explorer.exe"}}
 """
 
 # Fields that define the attack type — mutator must never change these

@@ -146,8 +146,8 @@ class Generator:
                     print(f"  [blue generator] attempt {attempt+1}: empty SPL returned")
                     continue
 
-                # Ensure the eval tag is present and correct
-                if f'rule_name="{rule_name}"' not in spl:
+                # Ensure the eval tag is present (accept both single and double quotes)
+                if f'rule_name="{rule_name}"' not in spl and f"rule_name='{rule_name}'" not in spl:
                     spl += f'\n| eval technique="{technique_id}", rule_name="{rule_name}"'
 
                 # Validate syntax using Splunk's parse endpoint
@@ -158,9 +158,9 @@ class Generator:
                     prompt += f"\n\nYour previous attempt had this SPL error: {parse_error}\nFix it."
                     continue
 
-                # Save the rule
+                # Save the rule (overwrite if same round/technique; prevents stale rules from prior runs)
                 out_path = GENERATED_DIR / f"{rule_name}.spl"
-                out_path.write_text(spl)
+                out_path.write_text(spl, encoding="utf-8")
                 explanation = result.get("explanation", "")
                 print(f"  [blue generator] ✓ saved: {rule_name}")
                 print(f"  [blue generator]   {explanation}")

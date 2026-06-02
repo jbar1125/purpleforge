@@ -80,7 +80,7 @@ The output is not a dashboard. The output is a self-improving detection ruleset 
 ### Prerequisites
 - [Splunk Enterprise](https://www.splunk.com/en_us/download/splunk-enterprise.html) (free trial + Developer License)
 - Python 3.11+
-- [Ollama](https://ollama.com/download) with `llama3.1` pulled, **or** a Gemini/Splunk Cloud API key
+- [Ollama](https://ollama.com/download) with `qwen2.5:3b` pulled (`ollama pull qwen2.5:3b`), **or** a Gemini/Splunk Cloud API key
 
 ### 1. Clone and install
 ```bash
@@ -107,9 +107,22 @@ python setup_verify.py
 ```
 All critical checks must pass before running.
 
-### 5. Run
+### 5. Install Splunk dashboard
+```bash
+python install_dashboard.py
+```
+Opens at `http://localhost:8000/en-US/app/search/purpleforge`
+
+### 6. Run
 ```bash
 python orchestrator/main.py
+```
+
+After the run, open the ATT&CK Navigator layer from `results/navigator_layer_*.json` at https://mitre-attack.github.io/attack-navigator/
+
+### Reset between runs
+```bash
+python clear_arena.py
 ```
 
 ---
@@ -132,7 +145,7 @@ splunk:
 llm:
   provider: ollama  # ollama | gemini | splunk_hosted
   ollama:
-    model: llama3.1
+    model: qwen2.5:3b   # fast; or use llama3.1 for higher quality
     base_url: http://localhost:11434
 
 arena:
@@ -159,7 +172,7 @@ PurpleForge is designed for extensibility:
 | New LLM provider | Subclass `LLMClient` in `llm_client/`, add a case in `llm_client/factory.py` |
 | More rounds / harder difficulty | Change `num_rounds` in `config.yaml` |
 | Kill chain chaining | Modify `orchestrator/main.py` to sequence techniques per round |
-| ATT&CK Navigator export | Add export method to `mitre/coverage.py` |
+| ATT&CK Navigator export | Automatic — runs after each arena via `mitre/navigator.py` |
 
 ---
 
@@ -167,7 +180,7 @@ PurpleForge is designed for extensibility:
 
 ```
 purpleforge/
-├── orchestrator/       # Round loop, scoring, reporting
+├── orchestrator/       # Round loop, scoring, reporting, SQLite checkpoint
 ├── red_agent/          # Attack templates + HEC injector + LLM mutator
 │   └── templates/      # Per-technique JSON attack definitions
 ├── blue_agent/         # SPL detection + LLM rule generator
@@ -175,11 +188,14 @@ purpleforge/
 │       ├── baseline/   # Hand-written baseline SPL rules
 │       └── generated/  # LLM-generated rules (auto-populated)
 ├── splunk_client/      # HEC, REST API, and MCP Server clients
-├── llm_client/         # LLM abstraction (Ollama / Gemini / Splunk Hosted)
-├── mitre/              # ATT&CK coverage matrix tracking
+├── llm_client/         # LLM abstraction (Ollama / Gemini / Foundation-sec-1.1)
+├── mitre/              # ATT&CK coverage matrix + Navigator layer export
 ├── dashboard/          # Splunk Simple XML dashboard
-├── docs/               # Setup guides
-└── results/            # Run output JSON reports (gitignored)
+├── docs/               # Setup guides + demo script
+├── architecture.svg    # Architecture diagram
+├── install_dashboard.py # One-command dashboard installer
+├── clear_arena.py      # Reset arena between runs
+└── results/            # Run reports + ATT&CK Navigator layers (gitignored)
 ```
 
 ---
