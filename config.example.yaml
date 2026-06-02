@@ -1,0 +1,43 @@
+splunk:
+  host: localhost
+  rest_port: 8089        # REST API / management port
+  hec_port: 8088         # HTTP Event Collector port
+  hec_token: "YOUR_HEC_TOKEN_HERE"
+  username: admin        # local Splunk Enterprise admin (not your splunk.com email)
+  password: "YOUR_SPLUNK_PASSWORD_HERE"
+  index_baseline: arena_baseline
+  index_attacks: arena_attacks
+  verify_ssl: false      # self-signed cert on local installs
+  # MCP token — generate via setup_verify.py after installing the MCP Server app.
+  # Leave blank if you haven't installed the MCP app yet (system still works via REST).
+  mcp_token: ""
+
+llm:
+  # Options: gemini | ollama | splunk_hosted
+  # gemini  — free API key from aistudio.google.com, fastest to get started
+  # ollama  — fully local, requires `ollama serve` + model pull
+  # splunk_hosted — Foundation-sec-1.1 via Splunk Cloud, earns Hosted Models prize
+  provider: gemini
+
+  gemini:
+    api_key: "YOUR_GEMINI_API_KEY"
+    model: gemini-2.0-flash
+
+  ollama:
+    model: llama3.1      # run: ollama pull llama3.1
+    base_url: http://localhost:11434
+
+  splunk_hosted:
+    endpoint: "https://YOUR_INSTANCE.splunkcloud.com/services/ml/models/foundation-sec-1.1-8b-instruct/predict"
+    token: "YOUR_SPLUNK_CLOUD_TOKEN"
+
+arena:
+  num_rounds: 5
+  indexing_wait_seconds: 4   # seconds to wait after HEC inject before searching
+  techniques:
+    - T1110.001   # Brute Force: Password Guessing
+    - T1021.001   # Remote Services: RDP
+    - T1053.005   # Scheduled Task / Job
+    - T1136.001   # Create Account: Local Account
+    - T1003.001   # OS Credential Dumping: LSASS
+    - T1547.001   # Boot/Logon Autostart: Registry Run Keys

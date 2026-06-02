@@ -1,0 +1,40 @@
+{
+  "technique_id": "T1110.001",
+  "technique_name": "Brute Force: Password Guessing",
+  "tactic": "Credential Access",
+  "events": [
+    {
+      "sourcetype": "WinEventLog:Security",
+      "template": {
+        "EventCode": 4625,
+        "EventDescription": "An account failed to log on",
+        "Account_Name": "{target_user}",
+        "Source_Network_Address": "{attacker_ip}",
+        "Logon_Type": 3,
+        "Failure_Reason": "%%2313",
+        "Workstation_Name": "{workstation}",
+        "Process_Name": "C:\\Windows\\System32\\svchost.exe"
+      },
+      "count": 80,
+      "spread_seconds": 300
+    },
+    {
+      "sourcetype": "WinEventLog:Security",
+      "template": {
+        "EventCode": 4624,
+        "EventDescription": "An account was successfully logged on",
+        "Account_Name": "{target_user}",
+        "Source_Network_Address": "{attacker_ip}",
+        "Logon_Type": 3,
+        "Workstation_Name": "{workstation}"
+      },
+      "count": 1,
+      "spread_seconds": 5,
+      "note": "Successful login after brute force"
+    }
+  ],
+  "mutation_hints": {
+    "evadable_fields": ["count", "spread_seconds", "Source_Network_Address", "Logon_Type"],
+    "objective": "Guess valid credentials for target_user"
+  }
+}

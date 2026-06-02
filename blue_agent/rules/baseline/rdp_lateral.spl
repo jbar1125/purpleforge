@@ -1,0 +1,4 @@
+index=arena_attacks sourcetype="WinEventLog:Security" EventCode=4624 Logon_Type=10
+| stats count by Source_Network_Address, Account_Name
+| where count >= 1
+| eval technique="T1021.001", rule_name="rdp_lateral_baseline"

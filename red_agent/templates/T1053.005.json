@@ -1,0 +1,36 @@
+{
+  "technique_id": "T1053.005",
+  "technique_name": "Scheduled Task/Job: Scheduled Task",
+  "tactic": "Persistence",
+  "events": [
+    {
+      "sourcetype": "WinEventLog:Security",
+      "template": {
+        "EventCode": 4698,
+        "EventDescription": "A scheduled task was created",
+        "Account_Name": "{target_user}",
+        "TaskName": "{task_name}",
+        "TaskContent": "<Actions><Exec><Command>{malicious_command}</Command></Exec></Actions>"
+      },
+      "count": 1,
+      "spread_seconds": 1
+    },
+    {
+      "sourcetype": "WinEventLog:System",
+      "template": {
+        "EventCode": 7045,
+        "EventDescription": "A new service was installed in the system",
+        "ServiceName": "{task_name}",
+        "ImagePath": "{malicious_command}",
+        "ServiceType": "user mode service",
+        "StartType": "auto start"
+      },
+      "count": 1,
+      "spread_seconds": 2
+    }
+  ],
+  "mutation_hints": {
+    "evadable_fields": ["TaskName", "malicious_command", "Account_Name"],
+    "objective": "Maintain persistence via scheduled task"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "technique_id": "T1003.001",
+  "technique_name": "OS Credential Dumping: LSASS Memory",
+  "tactic": "Credential Access",
+  "events": [
+    {
+      "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
+      "template": {
+        "EventCode": 10,
+        "EventDescription": "Process accessed",
+        "SourceImage": "{dumper_process}",
+        "TargetImage": "C:\\Windows\\System32\\lsass.exe",
+        "GrantedAccess": "0x1010",
+        "CallTrace": "C:\\Windows\\SYSTEM32\\ntdll.dll|C:\\Windows\\System32\\KERNELBASE.dll|UNKNOWN",
+        "SourceUser": "{target_user}"
+      },
+      "count": 1,
+      "spread_seconds": 1
+    }
+  ],
+  "mutation_hints": {
+    "evadable_fields": ["GrantedAccess", "dumper_process", "CallTrace"],
+    "objective": "Read LSASS memory to extract credential hashes"
+  }
+}

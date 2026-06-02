@@ -1,0 +1,130 @@
+<?xml version="1.0"?>
+<dashboard version="1.1" theme="dark">
+  <label>PurpleForge — Adversarial Detection Arena</label>
+  <description>Live coverage tracking for the PurpleForge red/blue agent simulation</description>
+
+  <!-- Row 1: KPI tiles -->
+  <row>
+    <panel>
+      <single>
+        <title>Techniques Covered</title>
+        <search>
+          <query>index=arena_attacks arena_round=* | stats dc(arena_technique) as covered | eval total=6 | eval label=covered." / ".total</query>
+          <earliest>-24h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="field">label</option>
+        <option name="colorBy">value</option>
+        <option name="useColors">1</option>
+        <option name="colorMode">block</option>
+        <option name="rangeColors">["0x65A637","0xF8BE34","0xD41F1F"]</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Total Rounds Run</title>
+        <search>
+          <query>index=arena_attacks | stats max(arena_round) as rounds</query>
+          <earliest>-24h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="field">rounds</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Total Events Injected</title>
+        <search>
+          <query>index=arena_attacks | stats count</query>
+          <earliest>-24h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="field">count</option>
+      </single>
+    </panel>
+  </row>
+
+  <!-- Row 2: Per-technique detection heatmap (table) -->
+  <row>
+    <panel>
+      <title>MITRE ATT&amp;CK Coverage Heatmap — Technique × Round</title>
+      <table>
+        <search>
+          <query>
+index=arena_attacks
+| table arena_round, arena_technique, EventCode
+| stats count by arena_round, arena_technique
+| eval status=if(count>0,"detected","missed")
+| table arena_round, arena_technique, status, count
+| sort arena_round, arena_technique
+          </query>
+          <earliest>-24h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="count">20</option>
+        <format type="color" field="status">
+          <colorPalette type="map">{"detected": #1a9641, "missed": #d7191c}</colorPalette>
+        </format>
+      </table>
+    </panel>
+  </row>
+
+  <!-- Row 3: Attack timeline + rule inventory -->
+  <row>
+    <panel>
+      <title>Attack Injection Timeline</title>
+      <chart>
+        <search>
+          <query>
+index=arena_attacks
+| timechart span=1m count by arena_technique
+          </query>
+          <earliest>-24h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.legend.placement">bottom</option>
+        <option name="charting.axisTitleX.text">Time</option>
+        <option name="charting.axisTitleY.text">Event Count</option>
+      </chart>
+    </panel>
+    <panel>
+      <title>Events Per Technique Per Round</title>
+      <chart>
+        <search>
+          <query>
+index=arena_attacks
+| stats count by arena_round, arena_technique
+| eval label=arena_technique." (R".arena_round.")"
+| chart sum(count) over arena_technique by arena_round
+          </query>
+          <earliest>-24h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">bar</option>
+      </chart>
+    </panel>
+  </row>
+
+  <!-- Row 4: Recent injected events raw feed -->
+  <row>
+    <panel>
+      <title>Recent Injected Events (arena_attacks)</title>
+      <table>
+        <search>
+          <query>
+index=arena_attacks
+| table _time, arena_round, arena_technique, sourcetype, EventCode, Account_Name, Source_Network_Address
+| sort -_time
+| head 50
+          </query>
+          <earliest>-24h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="count">20</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+</dashboard>

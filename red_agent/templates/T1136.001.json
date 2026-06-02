@@ -1,0 +1,35 @@
+{
+  "technique_id": "T1136.001",
+  "technique_name": "Create Account: Local Account",
+  "tactic": "Persistence",
+  "events": [
+    {
+      "sourcetype": "WinEventLog:Security",
+      "template": {
+        "EventCode": 4720,
+        "EventDescription": "A user account was created",
+        "Account_Name": "{new_account}",
+        "Subject_Account_Name": "{creating_user}",
+        "Workstation_Name": "{workstation}"
+      },
+      "count": 1,
+      "spread_seconds": 1
+    },
+    {
+      "sourcetype": "WinEventLog:Security",
+      "template": {
+        "EventCode": 4732,
+        "EventDescription": "A member was added to a security-enabled local group",
+        "Account_Name": "{new_account}",
+        "Group_Name": "Administrators",
+        "Subject_Account_Name": "{creating_user}"
+      },
+      "count": 1,
+      "spread_seconds": 2
+    }
+  ],
+  "mutation_hints": {
+    "evadable_fields": ["new_account", "creating_user", "Group_Name"],
+    "objective": "Create a backdoor local account with admin privileges"
+  }
+}

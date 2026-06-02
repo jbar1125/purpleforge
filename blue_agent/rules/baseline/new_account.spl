@@ -1,0 +1,4 @@
+index=arena_attacks sourcetype="WinEventLog:Security" EventCode=4720
+| stats count by Account_Name, Subject_Account_Name
+| where count >= 1
+| eval technique="T1136.001", rule_name="new_account_baseline"

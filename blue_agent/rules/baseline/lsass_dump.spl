@@ -1,0 +1,4 @@
+index=arena_attacks sourcetype="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational" EventCode=10 TargetImage="*lsass.exe"
+| stats count by SourceImage, TargetImage, GrantedAccess
+| where count >= 1
+| eval technique="T1003.001", rule_name="lsass_dump_baseline"

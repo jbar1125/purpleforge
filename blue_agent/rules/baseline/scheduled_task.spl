@@ -1,0 +1,4 @@
+index=arena_attacks sourcetype="WinEventLog:Security" EventCode=4698
+| stats count by Account_Name, TaskName
+| where count >= 1
+| eval technique="T1053.005", rule_name="scheduled_task_baseline"

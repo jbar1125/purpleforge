@@ -1,0 +1,25 @@
+{
+  "technique_id": "T1547.001",
+  "technique_name": "Boot/Logon Autostart: Registry Run Keys",
+  "tactic": "Persistence",
+  "events": [
+    {
+      "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
+      "template": {
+        "EventCode": 13,
+        "EventDescription": "Registry value set",
+        "EventType": "SetValue",
+        "Image": "{setting_process}",
+        "TargetObject": "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\{reg_key_name}",
+        "Details": "{malicious_command}",
+        "User": "{target_user}"
+      },
+      "count": 1,
+      "spread_seconds": 1
+    }
+  ],
+  "mutation_hints": {
+    "evadable_fields": ["TargetObject", "reg_key_name", "malicious_command", "setting_process"],
+    "objective": "Persist via registry run key to survive reboots"
+  }
+}

@@ -1,0 +1,4 @@
+index=arena_attacks sourcetype="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational" EventCode=13 TargetObject="*\\CurrentVersion\\Run*"
+| stats count by Image, TargetObject, Details
+| where count >= 1
+| eval technique="T1547.001", rule_name="registry_persist_baseline"
