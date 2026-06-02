@@ -28,22 +28,35 @@ _MAX_COUNT = 200          # cap injected events per spec
 _MAX_SPREAD_SECONDS = 90  # cap timing spread so events stay within the round window
 
 
-def _fill_template(template: dict) -> dict:
-    """Replace {placeholder} strings in a template dict with realistic values."""
+def _make_context() -> dict:
+    """
+    Sample placeholder values once per event spec.
+    All events in the same burst (same attacker IP, same target user, etc.)
+    share these values — this makes the attack realistic AND detectable
+    by threshold rules (e.g. 80 events from the same IP triggers brute force).
+    """
+    return {
+        "target_user": random.choice(_SAMPLE_USERS),
+        "attacker_ip": random.choice(_SAMPLE_IPS),
+        "workstation": random.choice(_SAMPLE_HOSTS),
+        "target_host": random.choice(_SAMPLE_HOSTS),
+        "new_account": f"svc_{random.randint(100,999)}",
+        "creating_user": random.choice(_SAMPLE_USERS),
+        "task_name": random.choice(_SAMPLE_TASKS),
+        "malicious_command": random.choice(_SAMPLE_CMDS),
+        "dumper_process": random.choice(_SAMPLE_PROCS),
+        "setting_process": random.choice(_SAMPLE_PROCS),
+        "reg_key_name": random.choice(_SAMPLE_REG_KEYS),
+    }
+
+
+def _fill_template(template: dict, ctx: dict) -> dict:
+    """Replace {placeholder} strings using a pre-sampled context dict."""
     result = {}
     for k, v in template.items():
         if isinstance(v, str):
-            v = v.replace("{target_user}", random.choice(_SAMPLE_USERS))
-            v = v.replace("{attacker_ip}", random.choice(_SAMPLE_IPS))
-            v = v.replace("{workstation}", random.choice(_SAMPLE_HOSTS))
-            v = v.replace("{target_host}", random.choice(_SAMPLE_HOSTS))
-            v = v.replace("{new_account}", f"svc_{random.randint(100,999)}")
-            v = v.replace("{creating_user}", random.choice(_SAMPLE_USERS))
-            v = v.replace("{task_name}", random.choice(_SAMPLE_TASKS))
-            v = v.replace("{malicious_command}", random.choice(_SAMPLE_CMDS))
-            v = v.replace("{dumper_process}", random.choice(_SAMPLE_PROCS))
-            v = v.replace("{setting_process}", random.choice(_SAMPLE_PROCS))
-            v = v.replace("{reg_key_name}", random.choice(_SAMPLE_REG_KEYS))
+            for placeholder, value in ctx.items():
+                v = v.replace(f"{{{placeholder}}}", value)
         result[k] = v
     return result
 
@@ -95,9 +108,13 @@ class Injector:
             count = min(int(spec_overrides.get("count", event_spec.get("count", 1))), _MAX_COUNT)
             spread = min(float(spec_overrides.get("spread_seconds", event_spec.get("spread_seconds", 1))), _MAX_SPREAD_SECONDS)
 
+            # Sample context ONCE per spec so all events in the burst share the same IP/user/etc.
+            # This makes threshold rules work (80 events from same IP triggers brute force).
+            ctx = _make_context()
+
             events_to_send = []
             for i in range(count):
-                ev = _fill_template(template)
+                ev = _fill_template(template, ctx)
                 ev["arena_round"] = round_num
                 ev["arena_technique"] = technique_id
                 # Spread events backwards in time to simulate a real attack burst.

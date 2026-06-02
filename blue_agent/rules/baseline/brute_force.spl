@@ -1,4 +1,4 @@
 index=arena_attacks sourcetype="WinEventLog:Security" EventCode=4625
 | stats count by Source_Network_Address, Account_Name
-| where count > 30
+| where count >= 10
 | eval technique="T1110.001", rule_name="brute_force_baseline"
