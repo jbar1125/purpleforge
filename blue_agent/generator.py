@@ -16,6 +16,14 @@ Rules for your response:
 - Write the narrowest rule that catches the attack without matching normal activity
 - No markdown, no code fences, no text outside the JSON
 
+CRITICAL SPL SYNTAX RULES (violations cause parse errors):
+- Use `| where count >= N` AFTER a stats command, NOT inside it
+- `| stats count by field` — `by` takes field names only, no operators
+- Correct: `| stats count by Source_Network_Address | where count >= 5`
+- Wrong:   `| stats count >= 5 by Source_Network_Address`
+- Use double quotes for string values: EventCode=4625, NOT EventCode="4625"
+- Do NOT use single quotes for field values in search filters
+
 EXAMPLES OF VALID RULES:
 
 Example 1 — Brute Force with low threshold:
