@@ -148,6 +148,41 @@ class SearchClient:
         resp.raise_for_status()
         return [e["name"] for e in resp.json().get("entry", [])]
 
+    def run_search_sdk(self, spl: str, earliest: str = "-15m", latest: str = "now", max_results: int = 500) -> list[dict]:
+        """
+        Run a SPL search using the official Splunk Python SDK.
+        Used to satisfy the 'Best Use of Developer Tools' prize requirement.
+        Falls back to run_search_async on ImportError.
+        """
+        try:
+            import splunklib.client as splunk_client
+            import splunklib.results as splunk_results
+
+            host, port_str = self.base.replace("https://", "").split(":")
+            service = splunk_client.connect(
+                host=host,
+                port=int(port_str),
+                username=self.auth[0],
+                password=self.auth[1],
+                scheme="https",
+                verify=self.verify,
+            )
+            kwargs = {
+                "earliest_time": earliest,
+                "latest_time": latest,
+                "exec_mode": "blocking",
+                "count": max_results,
+            }
+            spl_query = f"search {spl}" if not spl.strip().startswith("search") else spl
+            job = service.jobs.create(spl_query, **kwargs)
+            rows = []
+            for result in splunk_results.JSONResultsReader(job.results(output_mode="json", count=max_results)):
+                if isinstance(result, dict):
+                    rows.append(result)
+            return rows
+        except ImportError:
+            return self.run_search_async(spl, earliest=earliest, latest=latest, max_results=max_results)
+
     def create_index(self, name: str) -> bool:
         """Create an index if it doesn't already exist."""
         if name in self.list_indexes():

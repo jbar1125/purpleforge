@@ -50,6 +50,16 @@ def _init_schema(conn: sqlite3.Connection) -> None:
             overrides    TEXT NOT NULL,  -- JSON dict
             PRIMARY KEY (run_id, round_num, technique_id)
         );
+
+        CREATE TABLE IF NOT EXISTS rule_provenance (
+            run_id       TEXT NOT NULL,
+            round_num    INTEGER NOT NULL,
+            technique_id TEXT NOT NULL,
+            child_rule   TEXT NOT NULL,  -- generated rule name
+            parent_rule  TEXT,           -- rule red was evading (NULL = first miss)
+            mutation     TEXT,           -- JSON: what red changed to force this rule
+            PRIMARY KEY (run_id, child_rule)
+        );
     """)
     conn.commit()
 
@@ -102,6 +112,27 @@ class Checkpoint:
                     "INSERT OR REPLACE INTO mutations (run_id, round_num, technique_id, overrides) VALUES (?, ?, ?, ?)",
                     (self.run_id, round_num, tid, json.dumps(overrides)),
                 )
+        self.conn.commit()
+
+    def save_rule_provenance(
+        self,
+        round_num: int,
+        technique_id: str,
+        child_rule: str,
+        parent_rule: str | None,
+        mutation: dict | None,
+    ) -> None:
+        """Track the parent→child rule lineage (the AI learning chain)."""
+        self.conn.execute(
+            """INSERT OR REPLACE INTO rule_provenance
+               (run_id, round_num, technique_id, child_rule, parent_rule, mutation)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                self.run_id, round_num, technique_id,
+                child_rule, parent_rule,
+                json.dumps(mutation) if mutation else None,
+            ),
+        )
         self.conn.commit()
 
     def mark_complete(self) -> None:

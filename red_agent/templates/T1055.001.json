@@ -1,0 +1,26 @@
+{
+  "technique_id": "T1055.001",
+  "technique_name": "Process Injection: Dynamic-link Library Injection",
+  "tactic": "Defense Evasion",
+  "events": [
+    {
+      "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
+      "template": {
+        "EventCode": 8,
+        "EventDescription": "CreateRemoteThread",
+        "SourceImage": "{dumper_process}",
+        "TargetImage": "C:\\Windows\\System32\\explorer.exe",
+        "NewThreadId": "4712",
+        "StartAddress": "0x7FFB12345678",
+        "StartModule": "Unknown",
+        "StartFunction": "Unknown"
+      },
+      "count": 1,
+      "spread_seconds": 2
+    }
+  ],
+  "mutation_hints": {
+    "evadable_fields": ["SourceImage", "TargetImage", "StartAddress"],
+    "objective": "Inject code into a legitimate process to evade detection"
+  }
+}

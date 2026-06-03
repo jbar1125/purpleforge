@@ -1,0 +1,24 @@
+{
+  "technique_id": "T1562.001",
+  "technique_name": "Impair Defenses: Disable or Modify Tools",
+  "tactic": "Defense Evasion",
+  "events": [
+    {
+      "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
+      "template": {
+        "EventCode": 13,
+        "EventDescription": "Registry value set",
+        "TargetObject": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\DisableAntiSpyware",
+        "Details": "DWORD (0x00000001)",
+        "Image": "{setting_process}",
+        "User": "{target_user}"
+      },
+      "count": 1,
+      "spread_seconds": 2
+    }
+  ],
+  "mutation_hints": {
+    "evadable_fields": ["TargetObject", "Details", "Image"],
+    "objective": "Disable Windows Defender to prevent malware detection"
+  }
+}

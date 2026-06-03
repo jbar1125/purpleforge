@@ -1,0 +1,2 @@
+index=arena_attacks EventCode=1 Image="*powershell.exe" CommandLine="*-EncodedCommand*" OR CommandLine="*-enc *"
+| eval technique="T1059.001", rule_name="powershell_encoded_baseline"

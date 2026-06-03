@@ -42,3 +42,6 @@ arena:
     - T1136.001   # Create Account: Local Account
     - T1003.001   # OS Credential Dumping: LSASS
     - T1547.001   # Boot/Logon Autostart: Registry Run Keys
+    - T1059.001   # PowerShell: Encoded Command
+    - T1055.001   # Process Injection: DLL Injection
+    - T1562.001   # Impair Defenses: Disable Windows Defender

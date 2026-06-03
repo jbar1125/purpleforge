@@ -159,6 +159,16 @@ class Orchestrator:
                 )
                 for tid in misses:
                     self.coverage.record_rule_generated(tid)
+                    # Record which rule red was evading → which child rule blue generated
+                    parent = self.blue.get_catching_rule_for(tid)
+                    child = f"generated_r{round_num}_{tid.replace('.', '_')}"
+                    self.checkpoint.save_rule_provenance(
+                        round_num=round_num,
+                        technique_id=tid,
+                        child_rule=child,
+                        parent_rule=parent,
+                        mutation=self.red.get_current_overrides().get(tid),
+                    )
 
             # ── 6. Red mutates for hits ──────────────────────────────────────
             if hits:

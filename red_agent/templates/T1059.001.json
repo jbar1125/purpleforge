@@ -1,0 +1,27 @@
+{
+  "technique_id": "T1059.001",
+  "technique_name": "Command and Scripting Interpreter: PowerShell",
+  "tactic": "Execution",
+  "events": [
+    {
+      "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
+      "template": {
+        "EventCode": 1,
+        "EventDescription": "Process Create",
+        "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+        "CommandLine": "powershell.exe -NoProfile -NonInteractive -EncodedCommand JABjAD0ATgBlAHcALQBPAGIAagBlAGMAdAAgAFMAeQBzAHQAZQBtAC4ATgBlAHQALgBXAGUAYgBDAGwAaQBlAG4AdAA7AA==",
+        "ParentImage": "C:\\Windows\\System32\\cmd.exe",
+        "User": "{target_user}",
+        "Hashes": "SHA256=AABBCCDD112233440000000000000000DEADBEEF00000000CAFEBABE00000001",
+        "IntegrityLevel": "High",
+        "CurrentDirectory": "C:\\Users\\{target_user}\\AppData\\Local\\Temp\\"
+      },
+      "count": 1,
+      "spread_seconds": 2
+    }
+  ],
+  "mutation_hints": {
+    "evadable_fields": ["CommandLine", "ParentImage", "Image", "IntegrityLevel"],
+    "objective": "Execute arbitrary PowerShell payload on target host"
+  }
+}

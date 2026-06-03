@@ -1,0 +1,2 @@
+index=arena_attacks EventCode=8 NOT (SourceImage="*svchost.exe" OR SourceImage="*MsMpEng.exe" OR SourceImage="*WmiPrvSE.exe")
+| eval technique="T1055.001", rule_name="process_injection_baseline"

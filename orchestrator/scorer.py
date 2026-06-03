@@ -22,6 +22,12 @@ _RULE_NAME_TO_TECHNIQUE = {
     "lsass_dump_baseline": "T1003.001",
     "registry_persist": "T1547.001",
     "registry_persist_baseline": "T1547.001",
+    "powershell_encoded": "T1059.001",
+    "powershell_encoded_baseline": "T1059.001",
+    "process_injection": "T1055.001",
+    "process_injection_baseline": "T1055.001",
+    "defender_disabled": "T1562.001",
+    "defender_disabled_baseline": "T1562.001",
 }
 
 # Generated rule name pattern: generated_rN_T<TTTT>_<SSS> → technique

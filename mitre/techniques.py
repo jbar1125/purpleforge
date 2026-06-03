@@ -31,4 +31,19 @@ TECHNIQUES = {
         "tactic": "Persistence",
         "description": "Persistence via HKCU or HKLM Run registry keys",
     },
+    "T1059.001": {
+        "name": "Command and Scripting Interpreter: PowerShell",
+        "tactic": "Execution",
+        "description": "PowerShell execution with encoded or obfuscated command",
+    },
+    "T1055.001": {
+        "name": "Process Injection: Dynamic-link Library Injection",
+        "tactic": "Defense Evasion",
+        "description": "Remote thread created in a target process (CreateRemoteThread)",
+    },
+    "T1562.001": {
+        "name": "Impair Defenses: Disable or Modify Tools",
+        "tactic": "Defense Evasion",
+        "description": "Windows Defender disabled via registry key modification",
+    },
 }

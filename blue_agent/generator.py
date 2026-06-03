@@ -53,6 +53,8 @@ Your task: Write a NEW SPL detection rule that catches this specific evasion pat
 Focus on what makes these events anomalous AFTER the mutation — not just what the
 baseline rule already checks.
 
+{count_hint}
+
 The rule_name for your eval statement must be exactly: "{rule_name}"
 Return JSON: {{"spl": "...", "explanation": "..."}}
 """
@@ -132,6 +134,17 @@ class Generator:
             for ev in sample
         ]
 
+        # If red reduced count, threshold rules won't work — tell the LLM to detect on field patterns
+        mutated_count = (mutation_overrides or {}).get("count")
+        if mutated_count is not None and int(mutated_count) <= 5:
+            count_hint = (
+                f"IMPORTANT: Red reduced event count to {mutated_count}. "
+                "Do NOT use a stats count threshold — instead detect on specific field values or "
+                "behavior patterns present in the sample events above."
+            )
+        else:
+            count_hint = ""
+
         system = SYSTEM_PROMPT.format(technique_id=technique_id, rule_name=rule_name)
         prompt = USER_PROMPT_TEMPLATE.format(
             technique_id=technique_id,
@@ -141,6 +154,7 @@ class Generator:
             catching_rule_section=catching_section,
             mutation_context=mutation_context,
             rule_name=rule_name,
+            count_hint=count_hint,
         )
 
         for attempt in range(self.max_retries):
