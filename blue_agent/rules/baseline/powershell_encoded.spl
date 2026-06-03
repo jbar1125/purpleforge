@@ -1,2 +1,2 @@
-index=arena_attacks EventCode=1 Image="*powershell.exe" CommandLine="*-EncodedCommand*" OR CommandLine="*-enc *"
+index=arena_attacks (EventCode=1 Image="*\\powershell.exe" (CommandLine="*-Enc*" OR CommandLine="*-EncodedCommand*" OR CommandLine="*IEX*" OR CommandLine="*DownloadString*")) OR (EventCode=4104 (ScriptBlockText="*DownloadString*" OR ScriptBlockText="*IEX*" OR ScriptBlockText="*WebClient*")) OR (EventCode=3 Image="*\\powershell.exe" DestinationPort=80 OR DestinationPort=443 OR DestinationPort=8080)
 | eval technique="T1059.001", rule_name="powershell_encoded_baseline"

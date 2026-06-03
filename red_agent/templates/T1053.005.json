@@ -4,33 +4,52 @@
   "tactic": "Persistence",
   "events": [
     {
-      "sourcetype": "WinEventLog:Security",
+      "note": "schtasks.exe process creation — LOLBin used to register the task",
+      "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
       "template": {
-        "EventCode": 4698,
-        "EventDescription": "A scheduled task was created",
-        "Account_Name": "{target_user}",
-        "TaskName": "{task_name}",
-        "TaskContent": "<Actions><Exec><Command>{malicious_command}</Command></Exec></Actions>"
+        "EventCode": 1,
+        "EventDescription": "Process Create",
+        "Image": "C:\\Windows\\System32\\schtasks.exe",
+        "CommandLine": "schtasks.exe /Create /TN \"{task_name}\" /TR \"{malicious_command}\" /SC ONLOGON /RU SYSTEM /F",
+        "ParentImage": "C:\\Windows\\System32\\cmd.exe",
+        "User": "CORP\\{creating_user}",
+        "IntegrityLevel": "High",
+        "Hashes": "SHA256=76D79B2B73C6B72B4B0B8B3B8B3B8B3B8B3B8B3B8B3B8B3B8B3B8B3B8B3B8B3"
       },
       "count": 1,
       "spread_seconds": 1
     },
     {
-      "sourcetype": "WinEventLog:System",
+      "note": "Windows Security 4698 — task creation audit event with full XML TaskContent",
+      "sourcetype": "WinEventLog:Security",
       "template": {
-        "EventCode": 7045,
-        "EventDescription": "A new service was installed in the system",
-        "ServiceName": "{task_name}",
-        "ImagePath": "{malicious_command}",
-        "ServiceType": "user mode service",
-        "StartType": "auto start"
+        "EventCode": 4698,
+        "Account_Name": "{creating_user}",
+        "Account_Domain": "CORP",
+        "TaskName": "{task_name}",
+        "TaskContent": "<Task><Triggers><LogonTrigger><Enabled>true</Enabled></LogonTrigger></Triggers><Actions><Exec><Command>{malicious_command}</Command></Exec></Actions><Principals><Principal><RunLevel>HighestAvailable</RunLevel></Principal></Principals></Task>"
       },
       "count": 1,
       "spread_seconds": 2
+    },
+    {
+      "note": "Payload executes under taskeng.exe/svchost.exe — confirms task ran",
+      "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
+      "template": {
+        "EventCode": 1,
+        "EventDescription": "Process Create",
+        "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+        "CommandLine": "powershell.exe -NonI -W Hidden -Exec Bypass -Enc JABjAD0ATgBlAHcALQBPAGIAagBlAGMAdAAoAA==",
+        "ParentImage": "C:\\Windows\\System32\\svchost.exe",
+        "User": "NT AUTHORITY\\SYSTEM",
+        "IntegrityLevel": "System"
+      },
+      "count": 1,
+      "spread_seconds": 5
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["TaskName", "Account_Name", "ImagePath"],
-    "objective": "Maintain persistence via scheduled task"
+    "evadable_fields": ["TaskName", "CommandLine", "ParentImage", "IntegrityLevel"],
+    "objective": "Maintain SYSTEM-level persistence that survives user logoff and reboots"
   }
 }

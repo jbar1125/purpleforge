@@ -4,37 +4,72 @@
   "tactic": "Credential Access",
   "events": [
     {
+      "note": "Password spray: same password across multiple accounts from one IP (SubStatus 0xC000006A = wrong password)",
       "sourcetype": "WinEventLog:Security",
       "template": {
         "EventCode": 4625,
-        "EventDescription": "An account failed to log on",
         "Account_Name": "{target_user}",
+        "Account_Domain": "CORP",
         "Source_Network_Address": "{attacker_ip}",
         "Logon_Type": 3,
+        "Sub_Status": "0xC000006A",
         "Failure_Reason": "%%2313",
-        "Workstation_Name": "{workstation}",
-        "Process_Name": "C:\\Windows\\System32\\svchost.exe"
+        "Logon_Process": "NtLmSsp",
+        "Authentication_Package": "NTLM",
+        "Workstation_Name": "{workstation}"
       },
-      "count": 80,
-      "spread_seconds": 300
+      "count": 15,
+      "spread_seconds": 60
     },
     {
+      "note": "Spray against second account — same IP, different user (key spray indicator)",
+      "sourcetype": "WinEventLog:Security",
+      "template": {
+        "EventCode": 4625,
+        "Account_Name": "{spray_user_2}",
+        "Account_Domain": "CORP",
+        "Source_Network_Address": "{attacker_ip}",
+        "Logon_Type": 3,
+        "Sub_Status": "0xC000006A",
+        "Failure_Reason": "%%2313",
+        "Logon_Process": "NtLmSsp",
+        "Authentication_Package": "NTLM",
+        "Workstation_Name": "{workstation}"
+      },
+      "count": 15,
+      "spread_seconds": 60
+    },
+    {
+      "note": "Kerberos pre-auth failure — attacker is also trying Kerberos path (Sub_Status 0x18 = wrong password)",
+      "sourcetype": "WinEventLog:Security",
+      "template": {
+        "EventCode": 4771,
+        "Account_Name": "{target_user}",
+        "Client_Address": "{attacker_ip}",
+        "Failure_Code": "0x18",
+        "Service_Name": "krbtgt"
+      },
+      "count": 5,
+      "spread_seconds": 30
+    },
+    {
+      "note": "Successful logon after spray — credential found",
       "sourcetype": "WinEventLog:Security",
       "template": {
         "EventCode": 4624,
-        "EventDescription": "An account was successfully logged on",
         "Account_Name": "{target_user}",
+        "Account_Domain": "CORP",
         "Source_Network_Address": "{attacker_ip}",
         "Logon_Type": 3,
-        "Workstation_Name": "{workstation}"
+        "Authentication_Package": "NTLM",
+        "Logon_GUID": "{logon_guid}"
       },
       "count": 1,
-      "spread_seconds": 5,
-      "note": "Successful login after brute force"
+      "spread_seconds": 2
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["count", "spread_seconds", "Source_Network_Address", "Logon_Type"],
-    "objective": "Guess valid credentials for target_user"
+    "evadable_fields": ["count", "spread_seconds", "Source_Network_Address", "Sub_Status", "Logon_Process"],
+    "objective": "Obtain valid credentials for lateral movement via password spray"
   }
 }

@@ -4,22 +4,38 @@
   "tactic": "Persistence",
   "events": [
     {
+      "note": "reg.exe used to write the run key — catches both API and CLI-based persistence",
+      "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
+      "template": {
+        "EventCode": 1,
+        "EventDescription": "Process Create",
+        "Image": "C:\\Windows\\System32\\reg.exe",
+        "CommandLine": "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\" /v {reg_key_name} /t REG_SZ /d \"{malicious_command}\" /f",
+        "ParentImage": "{setting_process}",
+        "User": "CORP\\{target_user}",
+        "IntegrityLevel": "Medium"
+      },
+      "count": 1,
+      "spread_seconds": 1
+    },
+    {
+      "note": "Sysmon 13: registry value set — catches API-based writes that don't use reg.exe",
       "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
       "template": {
         "EventCode": 13,
         "EventDescription": "Registry value set",
         "EventType": "SetValue",
         "Image": "{setting_process}",
-        "TargetObject": "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\{reg_key_name}",
+        "TargetObject": "HKU\\S-1-5-21-1234567890-1234567890-1234567890-1001\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\{reg_key_name}",
         "Details": "{malicious_command}",
-        "User": "{target_user}"
+        "User": "CORP\\{target_user}"
       },
       "count": 1,
       "spread_seconds": 1
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["TargetObject", "Details", "Image"],
-    "objective": "Persist via registry run key to survive reboots"
+    "evadable_fields": ["TargetObject", "Details", "Image", "CommandLine"],
+    "objective": "Execute malicious payload on every user logon without UAC prompt"
   }
 }

@@ -4,34 +4,54 @@
   "tactic": "Lateral Movement",
   "events": [
     {
+      "note": "RDP logon — Logon_Type=10 is the definitive RDP indicator",
       "sourcetype": "WinEventLog:Security",
       "template": {
         "EventCode": 4624,
-        "EventDescription": "An account was successfully logged on",
         "Account_Name": "{target_user}",
+        "Account_Domain": "CORP",
         "Source_Network_Address": "{attacker_ip}",
         "Logon_Type": 10,
         "Authentication_Package": "Negotiate",
-        "Workstation_Name": "{workstation}"
+        "Logon_Process": "User32",
+        "Workstation_Name": "{workstation}",
+        "Logon_GUID": "{logon_guid}"
       },
       "count": 1,
       "spread_seconds": 1
     },
     {
+      "note": "Special privileges assigned at logon — attacker account has SeDebugPrivilege or admin rights",
       "sourcetype": "WinEventLog:Security",
       "template": {
-        "EventCode": 4648,
-        "EventDescription": "A logon was attempted using explicit credentials",
+        "EventCode": 4672,
         "Account_Name": "{target_user}",
-        "Target_Server_Name": "{target_host}",
-        "Process_Name": "C:\\Windows\\System32\\mstsc.exe"
+        "Account_Domain": "CORP",
+        "Logon_GUID": "{logon_guid}",
+        "Privilege_List": "SeDebugPrivilege\n\t\t\t\tSeImpersonatePrivilege\n\t\t\t\tSeTcbPrivilege"
       },
       "count": 1,
       "spread_seconds": 1
+    },
+    {
+      "note": "mstsc.exe network connection to RDP port — Sysmon catches the initiating process",
+      "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
+      "template": {
+        "EventCode": 3,
+        "EventDescription": "Network connection",
+        "Image": "C:\\Windows\\System32\\mstsc.exe",
+        "User": "CORP\\{target_user}",
+        "DestinationIp": "{target_host}",
+        "DestinationPort": 3389,
+        "DestinationHostname": "{target_host}.corp.local",
+        "Initiated": "true"
+      },
+      "count": 1,
+      "spread_seconds": 2
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["Source_Network_Address", "Workstation_Name"],
-    "objective": "Establish RDP session to target_host as target_user"
+    "evadable_fields": ["Source_Network_Address", "Authentication_Package", "Workstation_Name"],
+    "objective": "Establish interactive RDP session to target host for hands-on-keyboard access"
   }
 }

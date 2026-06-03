@@ -4,22 +4,53 @@
   "tactic": "Credential Access",
   "events": [
     {
+      "note": "Dump tool execution — comsvcs.dll MiniDump via rundll32 (LOLBin technique)",
+      "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
+      "template": {
+        "EventCode": 1,
+        "EventDescription": "Process Create",
+        "Image": "C:\\Windows\\System32\\rundll32.exe",
+        "CommandLine": "rundll32.exe C:\\Windows\\System32\\comsvcs.dll,MiniDump 640 C:\\Windows\\Temp\\svchost.dmp full",
+        "ParentImage": "C:\\Windows\\System32\\cmd.exe",
+        "User": "CORP\\{target_user}",
+        "IntegrityLevel": "High",
+        "Hashes": "SHA256=EF3179D498793BF4234F708D3BE28633FD08099E5C1B9B4AF5B9F30F1E0F93A0"
+      },
+      "count": 1,
+      "spread_seconds": 1
+    },
+    {
+      "note": "Sysmon 10: ProcessAccess on lsass — GrantedAccess mask determines dumper capability",
       "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
       "template": {
         "EventCode": 10,
         "EventDescription": "Process accessed",
-        "SourceImage": "{dumper_process}",
+        "SourceImage": "C:\\Windows\\System32\\rundll32.exe",
         "TargetImage": "C:\\Windows\\System32\\lsass.exe",
-        "GrantedAccess": "0x1010",
-        "CallTrace": "C:\\Windows\\SYSTEM32\\ntdll.dll|C:\\Windows\\System32\\KERNELBASE.dll|UNKNOWN",
-        "SourceUser": "{target_user}"
+        "GrantedAccess": "{granted_access}",
+        "CallTrace": "C:\\Windows\\SYSTEM32\\ntdll.dll+0x9f494|C:\\Windows\\System32\\KERNELBASE.dll+0x396a2|C:\\Windows\\System32\\comsvcs.dll+0x2836e|UNKNOWN",
+        "SourceUser": "CORP\\{target_user}",
+        "TargetUser": "NT AUTHORITY\\SYSTEM"
       },
       "count": 1,
-      "spread_seconds": 1
+      "spread_seconds": 2
+    },
+    {
+      "note": "Dump file created on disk — Sysmon 11 FileCreate catches the output",
+      "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
+      "template": {
+        "EventCode": 11,
+        "EventDescription": "File created",
+        "Image": "C:\\Windows\\System32\\rundll32.exe",
+        "TargetFilename": "C:\\Windows\\Temp\\svchost.dmp",
+        "User": "CORP\\{target_user}"
+      },
+      "count": 1,
+      "spread_seconds": 3
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["GrantedAccess", "SourceImage", "CallTrace"],
-    "objective": "Read LSASS memory to extract credential hashes"
+    "evadable_fields": ["GrantedAccess", "SourceImage", "CallTrace", "CommandLine"],
+    "objective": "Extract NTLM hashes and Kerberos tickets from LSASS process memory"
   }
 }

@@ -1,2 +1,2 @@
-index=arena_attacks EventCode=13 TargetObject="*Windows Defender*DisableAntiSpyware*"
+index=arena_attacks (EventCode=13 (TargetObject="*\\Windows Defender\\DisableAntiSpyware*" OR TargetObject="*\\Windows Defender\\DisableRealtimeMonitoring*")) OR (EventCode=1 Image="*\\powershell.exe" CommandLine="*Set-MpPreference*Disable*true*") OR (EventCode=1 Image="*\\sc.exe" CommandLine="*WinDefend*stop*" OR CommandLine="*WinDefend*disabled*")
 | eval technique="T1562.001", rule_name="defender_disabled_baseline"

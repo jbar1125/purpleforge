@@ -4,23 +4,57 @@
   "tactic": "Defense Evasion",
   "events": [
     {
+      "note": "Process access before injection — attacker opens handle to target with PROCESS_VM_WRITE rights",
+      "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
+      "template": {
+        "EventCode": 10,
+        "EventDescription": "Process accessed",
+        "SourceImage": "{dumper_process}",
+        "TargetImage": "C:\\Windows\\explorer.exe",
+        "GrantedAccess": "0x1fffff",
+        "CallTrace": "C:\\Windows\\SYSTEM32\\ntdll.dll+0x9f494|C:\\Windows\\System32\\KERNELBASE.dll+0x396a2|UNKNOWN",
+        "SourceUser": "CORP\\{target_user}",
+        "TargetUser": "CORP\\{target_user}"
+      },
+      "count": 1,
+      "spread_seconds": 1
+    },
+    {
+      "note": "CreateRemoteThread — attacker creates thread in target process to execute injected code",
       "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
       "template": {
         "EventCode": 8,
         "EventDescription": "CreateRemoteThread",
         "SourceImage": "{dumper_process}",
-        "TargetImage": "C:\\Windows\\System32\\explorer.exe",
-        "NewThreadId": "4712",
-        "StartAddress": "0x7FFB12345678",
-        "StartModule": "Unknown",
-        "StartFunction": "Unknown"
+        "TargetImage": "C:\\Windows\\explorer.exe",
+        "NewThreadId": "{process_id}",
+        "StartAddress": "0x7FFB3D4A1200",
+        "StartModule": "UNKNOWN",
+        "StartFunction": "UNKNOWN",
+        "SourceUser": "CORP\\{target_user}"
+      },
+      "count": 1,
+      "spread_seconds": 1
+    },
+    {
+      "note": "Suspicious DLL loaded into target process after injection",
+      "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
+      "template": {
+        "EventCode": 7,
+        "EventDescription": "Image loaded",
+        "Image": "C:\\Windows\\explorer.exe",
+        "ImageLoaded": "C:\\Users\\{target_user}\\AppData\\Local\\Temp\\payload.dll",
+        "Signed": "false",
+        "Signature": "",
+        "User": "CORP\\{target_user}",
+        "Hashes": "SHA256=BADC0DE00000000000000000000000000000000000000000000000000000DEAD"
       },
       "count": 1,
       "spread_seconds": 2
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["SourceImage", "TargetImage", "StartAddress"],
-    "objective": "Inject code into a legitimate process to evade detection"
+    "evadable_fields": ["SourceImage", "TargetImage", "GrantedAccess", "StartAddress"],
+    "objective": "Hide malicious code inside a legitimate process to evade AV and EDR"
   }
 }

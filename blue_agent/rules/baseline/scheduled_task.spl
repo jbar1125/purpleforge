@@ -1,4 +1,2 @@
-index=arena_attacks sourcetype="WinEventLog:Security" EventCode=4698
-| stats count by Account_Name, TaskName
-| where count >= 1
+index=arena_attacks (EventCode=4698) OR (EventCode=1 Image="*\\schtasks.exe" CommandLine="*/Create*") OR (EventCode=1 IntegrityLevel="System" (ParentImage="*\\taskeng.exe" OR ParentImage="*\\svchost.exe") CommandLine="*powershell*")
 | eval technique="T1053.005", rule_name="scheduled_task_baseline"

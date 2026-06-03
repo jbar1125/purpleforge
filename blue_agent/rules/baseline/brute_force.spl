@@ -1,4 +1,5 @@
-index=arena_attacks sourcetype="WinEventLog:Security" EventCode=4625
-| stats count by Source_Network_Address, Account_Name
-| where count >= 10
+index=arena_attacks EventCode=4625
+| bucket _time span=5m
+| stats dc(Account_Name) as sprayed_accounts, count as total_failures, values(Sub_Status) as sub_statuses by Source_Network_Address, _time
+| where sprayed_accounts >= 3 OR total_failures >= 10
 | eval technique="T1110.001", rule_name="brute_force_baseline"

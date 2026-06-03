@@ -4,21 +4,53 @@
   "tactic": "Defense Evasion",
   "events": [
     {
+      "note": "PowerShell disables Defender real-time monitoring (Set-MpPreference)",
+      "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
+      "template": {
+        "EventCode": 1,
+        "EventDescription": "Process Create",
+        "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+        "CommandLine": "powershell.exe -Command \"Set-MpPreference -DisableRealtimeMonitoring $true -DisableBehaviorMonitoring $true -DisableBlockAtFirstSeen $true\"",
+        "ParentImage": "{setting_process}",
+        "User": "CORP\\{target_user}",
+        "IntegrityLevel": "High"
+      },
+      "count": 1,
+      "spread_seconds": 1
+    },
+    {
+      "note": "Registry key set — policy-based Defender disable (survives PS cmdlet reversal)",
       "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
       "template": {
         "EventCode": 13,
         "EventDescription": "Registry value set",
+        "EventType": "SetValue",
+        "Image": "{setting_process}",
         "TargetObject": "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows Defender\\DisableAntiSpyware",
         "Details": "DWORD (0x00000001)",
-        "Image": "{setting_process}",
-        "User": "{target_user}"
+        "User": "CORP\\{target_user}"
       },
       "count": 1,
       "spread_seconds": 2
+    },
+    {
+      "note": "sc.exe stops the WinDefend service directly (most aggressive disable method)",
+      "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
+      "template": {
+        "EventCode": 1,
+        "EventDescription": "Process Create",
+        "Image": "C:\\Windows\\System32\\sc.exe",
+        "CommandLine": "sc.exe stop WinDefend",
+        "ParentImage": "{setting_process}",
+        "User": "CORP\\{target_user}",
+        "IntegrityLevel": "High"
+      },
+      "count": 1,
+      "spread_seconds": 3
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["TargetObject", "Details", "Image"],
-    "objective": "Disable Windows Defender to prevent malware detection"
+    "evadable_fields": ["CommandLine", "Image", "TargetObject", "Details"],
+    "objective": "Blind the defender before deploying ransomware or exfiltrating data"
   }
 }

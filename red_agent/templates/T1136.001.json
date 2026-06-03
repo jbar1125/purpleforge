@@ -4,32 +4,65 @@
   "tactic": "Persistence",
   "events": [
     {
-      "sourcetype": "WinEventLog:Security",
+      "note": "net.exe used to create the account — Sysmon catches the LOLBin execution",
+      "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
       "template": {
-        "EventCode": 4720,
-        "EventDescription": "A user account was created",
-        "Account_Name": "{new_account}",
-        "Subject_Account_Name": "{creating_user}",
-        "Workstation_Name": "{workstation}"
+        "EventCode": 1,
+        "EventDescription": "Process Create",
+        "Image": "C:\\Windows\\System32\\net.exe",
+        "CommandLine": "net user {new_account} P@ssw0rd123! /add",
+        "ParentImage": "C:\\Windows\\System32\\cmd.exe",
+        "User": "CORP\\{creating_user}",
+        "IntegrityLevel": "High"
       },
       "count": 1,
       "spread_seconds": 1
     },
     {
+      "note": "Security audit: account created",
+      "sourcetype": "WinEventLog:Security",
+      "template": {
+        "EventCode": 4720,
+        "TargetUserName": "{new_account}",
+        "TargetDomainName": "{workstation}",
+        "SubjectUserName": "{creating_user}",
+        "SubjectDomainName": "CORP",
+        "SamAccountName": "{new_account}",
+        "UserPrincipalName": ""
+      },
+      "count": 1,
+      "spread_seconds": 1
+    },
+    {
+      "note": "Account immediately enabled (new accounts may be disabled by default)",
+      "sourcetype": "WinEventLog:Security",
+      "template": {
+        "EventCode": 4722,
+        "TargetUserName": "{new_account}",
+        "TargetDomainName": "{workstation}",
+        "SubjectUserName": "{creating_user}",
+        "SubjectDomainName": "CORP"
+      },
+      "count": 1,
+      "spread_seconds": 1
+    },
+    {
+      "note": "Account added to Administrators — escalation to local admin",
       "sourcetype": "WinEventLog:Security",
       "template": {
         "EventCode": 4732,
-        "EventDescription": "A member was added to a security-enabled local group",
-        "Account_Name": "{new_account}",
-        "Group_Name": "Administrators",
-        "Subject_Account_Name": "{creating_user}"
+        "MemberName": "{new_account}",
+        "GroupName": "Administrators",
+        "GroupDomainName": "Builtin",
+        "SubjectUserName": "{creating_user}",
+        "SubjectDomainName": "CORP"
       },
       "count": 1,
       "spread_seconds": 2
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["Account_Name", "Subject_Account_Name", "Group_Name", "Workstation_Name"],
-    "objective": "Create a backdoor local account with admin privileges"
+    "evadable_fields": ["TargetUserName", "SubjectUserName", "GroupName"],
+    "objective": "Create a hidden backdoor local admin account for persistent access"
   }
 }
