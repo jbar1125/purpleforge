@@ -31,7 +31,7 @@
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["Logon_Type", "Source_Network_Address", "Authentication_Package"],
+    "evadable_fields": ["Source_Network_Address", "Workstation_Name"],
     "objective": "Establish RDP session to target_host as target_user"
   }
 }
