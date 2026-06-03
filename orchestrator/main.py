@@ -35,6 +35,7 @@ from orchestrator.scorer import score_round
 from orchestrator.reporter import save_report, print_final_summary
 from mitre.navigator import export_navigator_layer
 from orchestrator.checkpoint import Checkpoint
+from red_agent.injector import _MAX_SPREAD_SECONDS
 
 console = Console()
 
@@ -122,9 +123,10 @@ class Orchestrator:
             console.print(f"  Waiting {self.indexing_wait}s for Splunk to index events...")
             time.sleep(self.indexing_wait)
 
-            # Scope search to this round's injection window only.
-            # Using epoch timestamps — the only format Splunk REST accepts reliably.
-            earliest = str(int(round_start.timestamp()))
+            # Scope search to this round's injection window.
+            # Events are backdated up to _MAX_SPREAD_SECONDS before injection time,
+            # so we must reach back that far before round_start to capture them all.
+            earliest = str(int(round_start.timestamp()) - _MAX_SPREAD_SECONDS - 10)
             latest = "now"
             # Also pass the round number so rules can optionally filter by arena_round
             self._current_round = round_num
