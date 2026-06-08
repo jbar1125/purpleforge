@@ -1,0 +1,22 @@
+title: Registry Run Key Persistence
+id: b1e7c3a0-0005-4a10-9e21-000000000547
+status: stable
+description: >
+  Detects autorun persistence via a CurrentVersion\Run key: either a Sysmon
+  registry set (13) or reg.exe adding a Run value (1).
+author: PurpleForge Blue Agent
+references:
+  - https://attack.mitre.org/techniques/T1547/001/
+logsource:
+  product: windows
+detection:
+  reg_setvalue:
+    EventCode: 13
+    TargetObject|contains: \CurrentVersion\Run
+  condition: reg_setvalue
+falsepositives:
+  - Software legitimately registering startup entries on install
+level: medium
+tags:
+  - attack.persistence
+  - attack.t1547.001

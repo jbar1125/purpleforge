@@ -1,0 +1,3 @@
+index=arena_attacks (Operation="New-InboxRule" OR Operation="Set-InboxRule")
+(Parameters="*ForwardTo*" OR Parameters="*RedirectTo*" OR Parameters="*ForwardAsAttachmentTo*")
+| eval technique="T1114.003", rule_name="email_forward_exchange"

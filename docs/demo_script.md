@@ -2,8 +2,8 @@
 
 ## Setup (off-camera)
 1. `python setup_verify.py` — all checks pass
-2. Clear previous data: `index=arena_attacks | delete` in Splunk search
-3. Arena config: 5 rounds, 6 techniques, Ollama qwen2.5:3b
+2. Clear previous data: `python clear_arena.py`
+3. Arena config: 600s real-time, 11 techniques, Groq Llama 3.3 70B
 
 ---
 
@@ -40,55 +40,69 @@ Key points to call out:
 
 ## Section 3: Live Demo (1:00–2:30)
 
+### Setup
+```bash
+python -m orchestrator.main --mode realtime --duration 600 --clean
+```
+
 ### Split screen: terminal + Splunk dashboard
 
-**Terminal side:** Run `PYTHONIOENCODING=utf-8 python orchestrator/main.py`
-
-**Splunk side:** Open `localhost:8000` → PurpleForge dashboard
+**Terminal side:** The running engine (rich-colored output)  
+**Splunk side:** `localhost:8000` → PurpleForge dashboard (auto-refreshes every 15s)
 
 **Narrate as it runs:**
 
-**Round 1:**
-> "Round 1. Red injects baseline attacks — brute force, LSASS dump, RDP lateral movement.
-> Blue's baseline rules catch most of them. 83% coverage right away.
-> But watch — the brute force rule has too high a threshold. It misses.
-> Blue's LLM just wrote a new SPL rule targeting that evasion pattern."
+**First 60s (initial injection):**
+> "Red is injecting 11 ATT&CK techniques simultaneously — brute force, LSASS dump,
+> RDP lateral movement, cloud account anomaly, email forwarding. Blue's baseline rules
+> catch most of them immediately. Watch the coverage line jump to 80%+.
+> But some techniques are slipping through."
 
-Point to: `[blue generator] ✓ saved: generated_r1_T1110_001`
+Point to the dashboard coverage chart climbing.
 
-**Round 1 → Round 2 transition:**
-> "Now red receives the catching rules. Its LLM mutates the attack parameters
-> to evade what blue just deployed. Count reduced, timing spread changed,
-> process names swapped."
+**t=60–120s (first mutations):**
+> "Red sees which rules caught it — and immediately mutates. Watch this.
+> 'MUTATE T1110.001 gen1 — evading via GrantedAccess, SourceImage.'
+> Red's LLM rewrote the attack to evade the exact rule that caught it.
+> Coverage just dropped. Blue is already sweeping — it found the miss."
 
-Point to: `[red mutator] mutation accepted: ['GrantedAccess', 'SourceImage']`
+Point to: `[RED] MUTATE T1110.001 gen1 — evading via [...]`
+Then: `[BLUE] GENERATE rule for missed T1110.001 gen1 ...`
 
-**Round 2:**
-> "Round 2. Red's mutations are working — detection drops. But now blue has new
-> context: it knows exactly what changed. The next rule it generates targets the mutation."
+**Kill-chain objective fires:**
+> "See this — 'OBJECTIVE ACHIEVED: T1078.004 — Authenticate with valid cloud credentials.'
+> Red evaded detection for 120 seconds. In a real environment, that's enough time
+> for persistence. The attack succeeded even though Blue eventually caught it."
 
-**Round 3-4 (show dashboard updating):**
-> "Watch the dashboard. Coverage is climbing. The generated rules are accumulating.
-> This is a detection ruleset that improves itself."
+Point to: `[RED] ⚡ OBJECTIVE ACHIEVED: T1078.004`
 
-**Show the dashboard coverage trend chart going up.**
+**t=120–300s (arms race in progress):**
+> "Blue just deployed a new rule — and Red's already mutating to gen2.
+> This is the real game: Blue's LLM writes detection logic in response to Red's
+> evasion, and Red's LLM reads the new rule and mutates again.
+> Neither side is static."
 
-**Round 5:**
-> "Final round. Coverage is [X]%. We started with 6 baseline rules.
-> We now have [Y] auto-generated rules — each one written in response to a real evasion."
+Point to the dashboard: "Mutation Generation per Technique" bar chart climbing.
+
+**Final state:**
+> "11 techniques. [N] rules generated automatically. [X]% coverage.
+> [Y] kill-chain objectives blocked — that's [Y] attacks that didn't succeed.
+> Every generated rule is directly traceable to a real evasion attempt."
 
 ---
 
 ## Section 4: Results (2:30–3:00)
 
-**Show:** Terminal final summary table.
-**Show:** Navigator layer in ATT&CK Navigator (open the JSON file at navigator.attackiq.com or the MITRE site).
+**Show:** Terminal final scoreboard (two tables — Technique status + Kill-Chain Objectives).
+**Show:** Navigator layer in ATT&CK Navigator (open `results/navigator_layer_*.json` at https://mitre-attack.github.io/attack-navigator/).
 
 **Say:**
-> "In 5 rounds, we went from [X]% to [Y]% windowed coverage.
-> [N] new rules generated automatically.
-> Every rule is traceable to a specific evasion attempt.
-> This is what adversarial detection engineering looks like at machine speed."
+> "In 10 minutes, we went from 6 hand-written rules to [N] total rules — [M] of them
+> written by AI, each targeting a specific mutation Red tried.
+> [Y]% detection coverage. [K] kill-chain objectives blocked out of 11.
+> This is what adversarial detection engineering looks like at machine speed —
+> not a red team engagement that costs $50k, but two AI agents fighting continuously
+> inside your SIEM."
 
 **Final line:**
 > "PurpleForge. Open source. MIT license. Two AI agents fighting inside your SIEM,

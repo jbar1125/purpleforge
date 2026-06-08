@@ -4,7 +4,7 @@
   "tactic": "Defense Evasion",
   "events": [
     {
-      "note": "Process access before injection — attacker opens handle to target with PROCESS_VM_WRITE rights",
+      "note": "Process access before injection — attacker opens handle with PROCESS_VM_WRITE rights",
       "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
       "template": {
         "EventCode": 10,
@@ -54,7 +54,29 @@
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["SourceImage", "TargetImage", "GrantedAccess", "StartAddress"],
-    "objective": "Hide malicious code inside a legitimate process to evade AV and EDR"
+    "evadable_fields": [
+      "SourceImage",
+      "TargetImage",
+      "GrantedAccess",
+      "StartAddress",
+      "CallTrace",
+      "ImageLoaded",
+      "Signed",
+      "TargetUser",
+      "StartModule",
+      "StartFunction",
+      "Hashes"
+    ],
+    "objective": "Hide malicious code inside a legitimate process to evade AV and EDR",
+    "dwell_threshold_seconds": 90,
+    "detection_anchors": [
+      "Field match: GrantedAccess=0x1fffff (PROCESS_ALL_ACCESS) → use 0x0438 (PROCESS_VM_WRITE|PROCESS_VM_READ|PROCESS_VM_OPERATION|PROCESS_QUERY_INFORMATION) — the minimum mask needed for DLL injection; rules often only alert on 0x1fffff or 0x143a",
+      "Field match: TargetImage=explorer.exe → inject into svchost.exe (-k netsvcs), spoolsv.exe, or dllhost.exe — trusted host processes with fewer injection-specific rules",
+      "Field match: StartModule=UNKNOWN or StartFunction=UNKNOWN → UNKNOWN in the start module indicates reflective/shellcode injection; use a valid module path like C:\\Windows\\System32\\kernel32.dll to avoid this trigger",
+      "Field match: CallTrace contains UNKNOWN → legitimate DLL injection via LoadLibrary shows ntdll → kernel32 → kernelbase in call trace with no UNKNOWN entries",
+      "Field: ImageLoaded path in \\AppData\\Local\\Temp\\ → change to C:\\Windows\\System32\\ or C:\\Program Files\\Common Files\\ — paths in user temp are a major alert; signed DLLs in system dirs evade most EDR rules",
+      "Field: Signed=false → if using a signed DLL as a proxy (e.g., side-loading a legitimate DLL with a malicious dependency), set Signed=true and provide a certificate Signature value",
+      "Field: SourceImage → change from staged tool to a legitimate process path like C:\\Windows\\System32\\rundll32.exe or C:\\Windows\\System32\\regsvr32.exe"
+    ]
   }
 }

@@ -1,2 +1,2 @@
-index=arena_attacks (EventCode=10 TargetImage="*\\lsass.exe" NOT (SourceImage="*\\svchost.exe" OR SourceImage="*\\MsMpEng.exe" OR SourceImage="*\\WerFault.exe")) OR (EventCode=1 CommandLine="*comsvcs*MiniDump*") OR (EventCode=11 TargetFilename="*.dmp" Image="*\\rundll32.exe")
+index=arena_attacks EventCode=10 TargetImage="*\\lsass.exe" NOT (SourceImage="C:\\Windows\\System32\\svchost.exe" OR SourceImage="C:\\Windows\\SysWow64\\svchost.exe" OR SourceImage="C:\\Windows\\System32\\MsMpEng.exe" OR SourceImage="C:\\Windows\\System32\\WerFault.exe")
 | eval technique="T1003.001", rule_name="lsass_dump_baseline"

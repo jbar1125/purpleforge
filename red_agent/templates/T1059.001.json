@@ -52,7 +52,29 @@
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["CommandLine", "ParentImage", "DestinationPort", "IntegrityLevel"],
-    "objective": "Execute in-memory payload to establish C2 channel without writing to disk"
+    "evadable_fields": [
+      "CommandLine",
+      "ParentImage",
+      "DestinationPort",
+      "IntegrityLevel",
+      "Image",
+      "ScriptBlockText",
+      "DestinationIp",
+      "DestinationHostname",
+      "CurrentDirectory",
+      "Hashes",
+      "Protocol"
+    ],
+    "objective": "Execute in-memory payload to establish C2 channel without writing to disk",
+    "dwell_threshold_seconds": 45,
+    "detection_anchors": [
+      "Wildcard match: CommandLine contains -Enc or -EncodedCommand → use shorthand '-e' or avoid encoding entirely; use -File with a temp script, or direct IEX via string concatenation to break the encoded-command pattern",
+      "Field match: Image=C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe → use C:\\Windows\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe (32-bit) or C:\\Program Files\\PowerShell\\7\\pwsh.exe (PS7) — rules often hardcode the PS5 path",
+      "Wildcard match: ScriptBlockText contains IEX or Invoke-Expression → use &([scriptblock]::Create(...)) or the dot-source operator; replace WebClient with Invoke-RestMethod, BitsTransfer, or Start-BitsTransfer",
+      "Field match: DestinationPort=80 → change to 443 (HTTPS C2 blends with legitimate traffic) or 8080/8443 (common proxy ports)",
+      "Field: ParentImage=cmd.exe → change to explorer.exe, winword.exe (macro), mshta.exe, or wscript.exe as the parent — direct cmd→powershell is a classic alert",
+      "Field match: IntegrityLevel=High → reduce to Medium if the payload doesn't require elevation; Medium-integrity PowerShell is much less suspicious",
+      "Field: CurrentDirectory → change from user profile to C:\\Windows\\System32\\ or C:\\ProgramData\\ — some rules alert on PS launched from user-writable dirs"
+    ]
   }
 }

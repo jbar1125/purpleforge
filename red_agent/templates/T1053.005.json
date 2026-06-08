@@ -33,7 +33,7 @@
       "spread_seconds": 2
     },
     {
-      "note": "Payload executes under taskeng.exe/svchost.exe — confirms task ran",
+      "note": "Payload executes under svchost.exe — confirms task ran",
       "sourcetype": "XmlWinEventLog:Microsoft-Windows-Sysmon/Operational",
       "template": {
         "EventCode": 1,
@@ -49,7 +49,27 @@
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["TaskName", "CommandLine", "ParentImage", "IntegrityLevel"],
-    "objective": "Maintain SYSTEM-level persistence that survives user logoff and reboots"
+    "evadable_fields": [
+      "TaskName",
+      "CommandLine",
+      "ParentImage",
+      "IntegrityLevel",
+      "Image",
+      "TaskContent",
+      "User",
+      "Hashes",
+      "Account_Domain"
+    ],
+    "objective": "Maintain SYSTEM-level persistence that survives user logoff and reboots",
+    "dwell_threshold_seconds": 120,
+    "detection_anchors": [
+      "Field match: Image=schtasks.exe → use C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe with Register-ScheduledTask cmdlet; no schtasks.exe process is spawned, evading schtasks-specific rules",
+      "Field match: CommandLine contains /Create or schtasks → PowerShell syntax has no /Create flag; also at.exe (legacy) uses 'at HH:MM cmd' syntax",
+      "Field match: IntegrityLevel=High → reduce to Medium if UAC was already bypassed upstream; High-integrity task creation is a key alert",
+      "Field match: ParentImage=cmd.exe → change to explorer.exe, powershell.exe, or wscript.exe as the parent spawning the task registration",
+      "XML TaskContent trigger: LogonTrigger → use BootTrigger (on system start) or a TimeTrigger with repetition interval — less alarming trigger types",
+      "Field match: TaskContent contains HighestAvailable RunLevel → use LeastPrivilege in the Principal to appear benign",
+      "Field: User → change from CORP\\creating_user to NT AUTHORITY\\SYSTEM if already elevated, or use a service account name"
+    ]
   }
 }

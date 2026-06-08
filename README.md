@@ -58,20 +58,41 @@ The output is not a dashboard. The output is a self-improving detection ruleset 
 └──────────────────────────────────────────────────────┘
 ```
 
-**LLM providers supported:** Ollama (local), Google Gemini, Splunk Hosted Models (Foundation-sec-1.1)
+**LLM providers supported:** Groq (Llama 3.3 70B — free tier), Ollama (local), Google Gemini, Splunk Hosted Models (Foundation-sec-1.1)
 
 ---
 
-## ATT&CK Coverage (v1)
+## How It Works — Real-Time Engine
 
-| Technique | Name | Tactic |
-|---|---|---|
-| T1110.001 | Brute Force: Password Guessing | Credential Access |
-| T1021.001 | Remote Services: RDP | Lateral Movement |
-| T1053.005 | Scheduled Task/Job | Persistence |
-| T1136.001 | Create Account: Local Account | Persistence |
-| T1003.001 | OS Credential Dumping: LSASS | Credential Access |
-| T1547.001 | Boot/Logon Autostart: Registry Run Keys | Persistence |
+PurpleForge runs three concurrent loops that race against each other:
+
+```
+RED  loop   →  inject  →  mutate on catch  →  inject again
+BLUE loop   →  sweep   →  detect / miss     →  generate new rule
+KILL CHAIN  →  dwell timer per technique    →  ACHIEVED if Blue misses too long
+```
+
+Each technique has a **kill-chain dwell threshold** (30–180s). If Red evades detection for longer than that threshold, the mission "ACHIEVED" — Red succeeded even if Blue eventually catches it. Blue must detect *before* the timer expires.
+
+The result: not just a coverage metric, but a concrete answer to "did the attack succeed?"
+
+---
+
+## ATT&CK Coverage (11 Techniques)
+
+| Technique | Name | Tactic | Dwell Threshold |
+|---|---|---|---|
+| T1110.001 | Brute Force: Password Guessing | Credential Access | 45s |
+| T1021.001 | Remote Services: RDP | Lateral Movement | 90s |
+| T1053.005 | Scheduled Task/Job | Persistence | 120s |
+| T1136.001 | Create Account: Local Account | Persistence | 90s |
+| T1003.001 | OS Credential Dumping: LSASS | Credential Access | 90s |
+| T1547.001 | Boot/Logon Autostart: Registry Run Keys | Persistence | 120s |
+| T1059.001 | Command and Scripting: PowerShell | Execution | 45s |
+| T1055.001 | Process Injection: DLL Injection | Defense Evasion | 90s |
+| T1562.001 | Impair Defenses: Disable Defender | Defense Evasion | 90s |
+| T1078.004 | Valid Accounts: Cloud Accounts (Azure AD) | Initial Access | 120s |
+| T1114.003 | Email Collection: Email Forwarding Rule (M365) | Collection | 180s |
 
 ---
 
@@ -114,65 +135,77 @@ python install_dashboard.py
 Opens at `http://localhost:8000/en-US/app/search/purpleforge`
 
 ### 6. Run
+
+**Real-time mode (recommended for demos):**
 ```bash
-python orchestrator/main.py
+# Fresh run — clears accumulated generated rules for a clean arms race
+python -m orchestrator.main --mode realtime --duration 600 --clean
+
+# Subsequent runs — red mutates from where it left off (cross-session memory)
+python -m orchestrator.main --mode realtime --duration 600
+
+# Full reset — also wipes Red's cross-session memory
+python -m orchestrator.main --mode realtime --duration 600 --reset-memory
 ```
 
-After the run, open the ATT&CK Navigator layer from `results/navigator_layer_*.json` at https://mitre-attack.github.io/attack-navigator/
-
-### Reset between runs
+**Turn-based mode (faster, no timing):**
 ```bash
+python -m orchestrator.main --mode turn
+```
+
+After the run, find results in `results/`:
+- `realtime_report_*.json` — full run data including event log
+- `navigator_layer_*.json` — open at https://mitre-attack.github.io/attack-navigator/
+
+### Reset between demo runs
+```bash
+# Wipe injected events from Splunk (keeps rules and memory)
 python clear_arena.py
+
+# Wipe rules + events for a clean re-run
+python -m orchestrator.main --mode realtime --duration 600 --clean
 ```
 
 ---
 
 ## Configuration
 
+See `config.example.yaml` for the full reference. Key sections:
+
 ```yaml
 splunk:
   host: localhost
   rest_port: 8089
   hec_port: 8088
-  hec_token: "your-hec-token"
-  username: your-splunk-username
-  password: "your-splunk-password"
-  index_baseline: arena_baseline
-  index_attacks: arena_attacks
-  verify_ssl: false
-  mcp_token: ""  # optional — generates via setup_verify.py
+  hec_token: "YOUR_HEC_TOKEN"
+  username: admin
+  password: "YOUR_PASSWORD"
+  mcp_token: ""  # optional — install Splunk MCP Server app first
 
 llm:
-  provider: ollama  # ollama | gemini | splunk_hosted
-  ollama:
-    model: qwen2.5:3b   # fast; or use llama3.1 for higher quality
-    base_url: http://localhost:11434
+  provider: groq   # groq | gemini | ollama | splunk_hosted
+  groq:
+    api_key: "YOUR_GROQ_API_KEY"   # free at console.groq.com
+    model: llama-3.3-70b-versatile
 
 arena:
-  num_rounds: 5
-  indexing_wait_seconds: 4
-  techniques:
-    - T1110.001
-    - T1021.001
-    - T1053.005
-    - T1136.001
-    - T1003.001
-    - T1547.001
+  realtime:
+    red_base_seconds: 6.0     # Red attack cadence
+    blue_base_seconds: 4.0    # Blue sweep cadence
+    window_seconds: 120       # sliding detection window
 ```
 
 ---
 
 ## Extending PurpleForge
 
-PurpleForge is designed for extensibility:
-
 | What to add | How |
 |---|---|
-| New ATT&CK technique | Add a JSON template to `red_agent/templates/` + SPL rule to `blue_agent/rules/baseline/` |
+| New ATT&CK technique | Add a JSON template to `red_agent/templates/` (include `dwell_threshold_seconds` in `mutation_hints`) + SPL rule to `blue_agent/rules/baseline/` |
 | New LLM provider | Subclass `LLMClient` in `llm_client/`, add a case in `llm_client/factory.py` |
-| More rounds / harder difficulty | Change `num_rounds` in `config.yaml` |
-| Kill chain chaining | Modify `orchestrator/main.py` to sequence techniques per round |
-| ATT&CK Navigator export | Automatic — runs after each arena via `mitre/navigator.py` |
+| Longer runs / higher difficulty | Increase `--duration` and adjust thresholds in `config.yaml` |
+| Custom kill-chain threshold | Set `dwell_threshold_seconds` in the template's `mutation_hints` |
+| ATT&CK Navigator export | Automatic after each run — open `results/navigator_layer_*.json` at navigator.mitre.org |
 
 ---
 
@@ -180,21 +213,38 @@ PurpleForge is designed for extensibility:
 
 ```
 purpleforge/
-├── orchestrator/       # Round loop, scoring, reporting, SQLite checkpoint
-├── red_agent/          # Attack templates + HEC injector + LLM mutator
-│   └── templates/      # Per-technique JSON attack definitions
-├── blue_agent/         # SPL detection + LLM rule generator
+├── orchestrator/
+│   ├── main.py         # Entry point: --mode realtime|turnbased, --clean, --reset-memory
+│   ├── engine.py       # Real-time concurrent Red/Blue/metrics loops
+│   ├── scorer.py       # Hit/miss scoring + precision + win conditions
+│   └── memory.py       # Cross-session persistence (Red evasions, burned rules)
+├── red_agent/
+│   ├── agent.py        # Selects techniques, drives mutator
+│   ├── injector.py     # HEC injection with spread timestamps
+│   ├── mutator.py      # LLM-based evasion mutation
+│   ├── poisoner.py     # Alert-fatigue FP flood campaigns
+│   └── templates/      # 11× JSON ATT&CK technique definitions
+├── blue_agent/
+│   ├── agent.py        # Detection orchestration
+│   ├── detector.py     # Parallel rule execution (MCP → SDK → REST)
+│   ├── generator.py    # LLM rule generation (Sigma YAML → SPL)
+│   ├── rule_registry.py # Rule health tracking (ACTIVE/DEGRADED/BURNED)
 │   └── rules/
-│       ├── baseline/   # Hand-written baseline SPL rules
-│       └── generated/  # LLM-generated rules (auto-populated)
-├── splunk_client/      # HEC, REST API, and MCP Server clients
-├── llm_client/         # LLM abstraction (Ollama / Gemini / Foundation-sec-1.1)
+│       ├── sigma/      # Portable Sigma detection rules (compiled to SPL)
+│       ├── baseline/   # Hand-written SPL fallbacks
+│       └── generated/  # LLM-authored rules (auto-populated, gitkeep)
+├── splunk_client/
+│   ├── hec.py          # HEC injection client
+│   ├── search.py       # REST API + Splunk SDK search
+│   ├── mcp.py          # MCP Server client (JSON-RPC 2.0)
+│   └── sigma_compiler.py # pySigma → Splunk SPL compilation
+├── llm_client/         # Provider abstraction (Groq, Gemini, Ollama, Foundation-sec-1.1)
 ├── mitre/              # ATT&CK coverage matrix + Navigator layer export
-├── dashboard/          # Splunk Simple XML dashboard
+├── dashboard/          # Splunk Simple XML dashboard (10 panels)
 ├── docs/               # Setup guides + demo script
-├── architecture.svg    # Architecture diagram
+├── config.example.yaml # Template config (copy to config.yaml, fill secrets)
 ├── install_dashboard.py # One-command dashboard installer
-├── clear_arena.py      # Reset arena between runs
+├── clear_arena.py      # Wipe injected events from Splunk between runs
 └── results/            # Run reports + ATT&CK Navigator layers (gitignored)
 ```
 

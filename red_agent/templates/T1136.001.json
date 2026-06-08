@@ -34,7 +34,7 @@
       "spread_seconds": 1
     },
     {
-      "note": "Account immediately enabled (new accounts may be disabled by default)",
+      "note": "Account immediately enabled",
       "sourcetype": "WinEventLog:Security",
       "template": {
         "EventCode": 4722,
@@ -62,7 +62,27 @@
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["TargetUserName", "SubjectUserName", "GroupName"],
-    "objective": "Create a hidden backdoor local admin account for persistent access"
+    "evadable_fields": [
+      "TargetUserName",
+      "SamAccountName",
+      "SubjectUserName",
+      "GroupName",
+      "Image",
+      "CommandLine",
+      "ParentImage",
+      "IntegrityLevel",
+      "UserPrincipalName"
+    ],
+    "objective": "Create a hidden backdoor local admin account for persistent access",
+    "dwell_threshold_seconds": 90,
+    "detection_anchors": [
+      "Field match: Image=net.exe → use C:\\Windows\\System32\\net1.exe (identical behavior; some rules only match net.exe not net1.exe) or C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe with New-LocalUser cmdlet",
+      "Field match: CommandLine contains 'net user' and '/add' → PowerShell syntax: New-LocalUser -Name x -Password (ConvertTo-SecureString 'pw' -AsPlainText -Force) -FullName '' -Description ''",
+      "Field match: GroupName=Administrators → use Backup Operators or Remote Desktop Users (also elevated but less commonly alerted on; Backup Operators can read all files and restore system state)",
+      "Field match: IntegrityLevel=High → reduce to Medium if UAC was already bypassed or account created via scheduled task at SYSTEM",
+      "Field: ParentImage=cmd.exe → change to powershell.exe, explorer.exe, or mmc.exe (management console) as the account-creation parent",
+      "Field: TargetUserName → use a name that matches existing service account patterns (svc_update_XX, healthsvc, etc.) to blend with legitimate accounts",
+      "Field: SamAccountName → must match TargetUserName; use same value as TargetUserName override"
+    ]
   }
 }

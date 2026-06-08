@@ -28,6 +28,10 @@ _RULE_NAME_TO_TECHNIQUE = {
     "process_injection_baseline": "T1055.001",
     "defender_disabled": "T1562.001",
     "defender_disabled_baseline": "T1562.001",
+    "cloud_account_anomaly": "T1078.004",
+    "cloud_account_anomaly_baseline": "T1078.004",
+    "email_forwarding_rule": "T1114.003",
+    "email_forwarding_rule_baseline": "T1114.003",
 }
 
 # Generated rule name pattern: generated_rN_T<TTTT>_<SSS> → technique
@@ -89,3 +93,82 @@ def score_round(
                 print(f"  [scorer] inferred technique {inferred} from rule name '{rule_name}'")
 
     return detected, catching_rules
+
+
+def score_precision(
+    detection_results: dict[str, list[dict]],
+    benign_marker: str = "benign",
+) -> tuple[float | None, dict[str, dict]]:
+    """
+    Measure how clean each rule's hits are, using benign traffic as ground truth.
+
+    A result row is a:
+      * false positive (FP) if it came from benign activity (arena_technique == benign)
+      * true positive  (TP) if it came from a real attack technique
+      * unscored       if it carries no arena_technique field (e.g. an aggregation
+                         rule like password-spray that collapses per-event fields) —
+                         we don't guess, we exclude it from the precision math.
+
+    Returns (overall_precision_or_None, per_rule) where per_rule[name] =
+    {tp, fp, unknown, precision}. Precision = TP / (TP + FP); None when a rule had
+    no classifiable hits. This is honest: rules we can't attribute aren't counted.
+    """
+    per_rule: dict[str, dict] = {}
+    total_tp = total_fp = 0
+
+    for rule_name, rows in detection_results.items():
+        tp = fp = unknown = 0
+        for row in rows:
+            origin = row.get("arena_technique")
+            if origin is None:
+                unknown += 1
+            elif origin == benign_marker:
+                fp += 1
+            else:
+                tp += 1
+        classified = tp + fp
+        per_rule[rule_name] = {
+            "tp": tp,
+            "fp": fp,
+            "unknown": unknown,
+            "precision": round(tp / classified, 3) if classified else None,
+        }
+        total_tp += tp
+        total_fp += fp
+
+    overall = round(total_tp / (total_tp + total_fp), 3) if (total_tp + total_fp) else None
+    return overall, per_rule
+
+
+def check_win(
+    coverage_pct: float,
+    compromised_count: int,
+    total_techniques: int,
+    blue_win_threshold: float = 70.0,
+    red_win_threshold: float = 60.0,
+    objectives_achieved: int = 0,
+) -> str | None:
+    """
+    Check whether a decisive win condition has been reached.
+
+    Red wins when it EITHER:
+      - Compromised (burned the covering rule) >= red_win_threshold % of techniques, OR
+      - Achieved kill-chain objectives on >= red_win_threshold % of techniques
+        (evaded detection long enough for the mission to succeed)
+
+    Blue wins when it maintains >= blue_win_threshold % detection coverage —
+    it held the line against Red's full pressure.
+
+    Returns "red", "blue", or None (game still in progress / contested).
+    Red win takes precedence: even a high-coverage Blue loses if Red's
+    objectives have already succeeded.
+    """
+    if total_techniques == 0:
+        return None
+    compromised_pct = compromised_count / total_techniques * 100
+    objectives_pct  = objectives_achieved / total_techniques * 100
+    if compromised_pct >= red_win_threshold or objectives_pct >= red_win_threshold:
+        return "red"
+    if coverage_pct >= blue_win_threshold:
+        return "blue"
+    return None

@@ -1,0 +1,29 @@
+title: Process Injection
+id: b1e7c3a0-0007-4a10-9e21-000000000055
+status: stable
+description: >
+  Detects process injection: a CreateRemoteThread from a non-system process (8),
+  an unsigned module loaded into a normally-clean host process (7), or a
+  full-access handle (0x1fffff) opened to another process (10).
+author: PurpleForge Blue Agent
+references:
+  - https://attack.mitre.org/techniques/T1055/001/
+logsource:
+  product: windows
+detection:
+  remote_thread:
+    EventCode: 8
+  remote_thread_benign:
+    SourceImage:
+      - C:\Windows\System32\svchost.exe
+      - C:\Windows\SysWow64\svchost.exe
+      - C:\Windows\System32\MsMpEng.exe
+      - C:\Windows\System32\WmiPrvSE.exe
+      - C:\Windows\System32\csrss.exe
+  condition: remote_thread and not remote_thread_benign
+falsepositives:
+  - Security tooling that injects for instrumentation
+level: high
+tags:
+  - attack.defense-evasion
+  - attack.t1055.001

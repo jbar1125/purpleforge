@@ -1,2 +1,2 @@
-index=arena_attacks (EventCode=8 NOT (SourceImage="*\\svchost.exe" OR SourceImage="*\\MsMpEng.exe" OR SourceImage="*\\WmiPrvSE.exe" OR SourceImage="*\\csrss.exe")) OR (EventCode=7 Signed="false" (Image="*\\explorer.exe" OR Image="*\\svchost.exe" OR Image="*\\notepad.exe")) OR (EventCode=10 GrantedAccess="0x1fffff" NOT SourceImage="*\\MsMpEng.exe")
+index=arena_attacks EventCode=8 NOT (SourceImage="C:\\Windows\\System32\\svchost.exe" OR SourceImage="C:\\Windows\\SysWow64\\svchost.exe" OR SourceImage="C:\\Windows\\System32\\MsMpEng.exe" OR SourceImage="C:\\Windows\\System32\\WmiPrvSE.exe" OR SourceImage="C:\\Windows\\System32\\csrss.exe")
 | eval technique="T1055.001", rule_name="process_injection_baseline"

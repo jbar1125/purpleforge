@@ -1,0 +1,31 @@
+title: Suspicious Email Forwarding / Inbox Rule (M365 Exchange Online)
+id: b1e7c3a0-0011-4a10-9e21-000001114003
+status: stable
+description: >
+  Detects external mail-exfiltration setup in the Microsoft 365 unified audit
+  log: an inbox rule that forwards or redirects mail (New/Set-InboxRule with
+  ForwardTo / RedirectTo / ForwardAsAttachmentTo), mailbox-level forwarding
+  (Set-Mailbox ForwardingSmtpAddress), or an org-wide transport rule. A hallmark
+  of business email compromise. Maps to MITRE T1114.003.
+author: PurpleForge Blue Agent
+references:
+  - https://attack.mitre.org/techniques/T1114/003/
+logsource:
+  category: cloud
+  product: m365
+detection:
+  inbox_rule_forward:
+    Operation:
+      - New-InboxRule
+      - Set-InboxRule
+    Parameters|contains:
+      - ForwardTo
+      - RedirectTo
+      - ForwardAsAttachmentTo
+  condition: inbox_rule_forward
+falsepositives:
+  - A user forwarding mail to a personal account with documented IT approval
+level: high
+tags:
+  - attack.collection
+  - attack.t1114.003

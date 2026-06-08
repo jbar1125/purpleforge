@@ -46,4 +46,14 @@ TECHNIQUES = {
         "tactic": "Defense Evasion",
         "description": "Windows Defender disabled via registry key modification",
     },
+    "T1078.004": {
+        "name": "Valid Accounts: Cloud Accounts",
+        "tactic": "Initial Access",
+        "description": "Abuse of valid Azure AD / Entra ID credentials — legacy-auth, risky, or anonymized-IP sign-in success",
+    },
+    "T1114.003": {
+        "name": "Email Collection: Email Forwarding Rule",
+        "tactic": "Collection",
+        "description": "External mail exfiltration via M365 inbox/mailbox forwarding rules (BEC hallmark)",
+    },
 }

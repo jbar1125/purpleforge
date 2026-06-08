@@ -1,88 +1,194 @@
 import json
 from pathlib import Path
+
+import yaml
+
 from llm_client.base import LLMClient
 from splunk_client.search import SearchClient
+from splunk_client import sigma_compiler
 
 GENERATED_DIR = Path(__file__).parent / "rules" / "generated"
 
-SYSTEM_PROMPT = """You are an expert Splunk detection engineer specializing in MITRE ATT&CK.
-Your job is to write SPL (Splunk Processing Language) detection rules that catch specific
-attack patterns that have evaded existing rules.
+# ──────────────────────────────────────────────────────────────────────────
+# PRIMARY PATH: author portable Sigma YAML, then compile to SPL via pySigma.
+# Sigma is the detection-as-code lingua franca — one rule runs on Splunk,
+# Elastic, Sentinel, QRadar + 20 SIEMs. Every rule Blue writes is portable.
+# ──────────────────────────────────────────────────────────────────────────
+SIGMA_SYSTEM_PROMPT = """You are an expert detection engineer who writes Sigma rules.
+Sigma is a portable, YAML-based detection format that compiles to any SIEM.
+
+Your job: given attack events that evaded existing detections, write ONE new Sigma
+rule (YAML) that catches the evasion pattern.
+
+OUTPUT RULES:
+- Output ONLY raw Sigma YAML. No markdown, no code fences, no prose before or after.
+- Use the EXACT field names that appear in the attack events (e.g. EventCode, Image,
+  CommandLine, TargetImage, SourceImage, GrantedAccess, TargetObject, ScriptBlockText,
+  DestinationPort, Source_Network_Address, Account_Name, Logon_Type).
+- Reference the event type with the field `EventCode` directly inside each selection.
+- Include a tag `attack.{tag}` so the technique is recorded.
+- Prefer field modifiers: |contains, |endswith, |startswith, |all for substrings.
+- Write the NARROWEST rule that still catches the evaded events — avoid matching
+  normal activity.
+
+*** CRITICAL — THE ONLY RULE THAT MATTERS ***
+The CATCHING RULE shown in the prompt is ALREADY BYPASSED. Do NOT reconstruct its
+anchor. Do NOT use the same field it matched on. Your rule must anchor on a DIFFERENT
+field — specifically the field values shown in "WHAT RED MUTATED".
+
+  Step 1: Look at "WHAT RED MUTATED TO EVADE" in the prompt.
+  Step 2: Find the specific field values Red changed TO (the new evading values).
+  Step 3: Write a rule that matches THOSE new values.
+
+If Red changed Sub_Status from 0xC000006A to 0xC000006D, anchor on 0xC000006D.
+If Red changed CommandLine to a new pattern, anchor on that new pattern.
+If Red changed SourceImage to a new path, anchor on that new path.
+Never write a rule that re-anchors on what the OLD rule already checks — Red has
+already proven it can bypass that.
+
+REQUIRED YAML STRUCTURE:
+title: <short title>
+status: experimental
+description: <one sentence: what this catches>
+logsource:
+  product: windows
+detection:
+  selection:
+    EventCode: <code>
+    <Field>|contains: <value>
+  condition: selection
+level: high
+tags:
+  - attack.{tag}
+
+EXAMPLE 1 — Red mutated Sub_Status from 0xC000006A to 0xC000006D to evade the
+baseline rule. Old rule anchored on 0xC000006A — useless now. Correct response:
+anchor on the NEW value 0xC000006D:
+title: Brute Force via NTLM General Failure Code
+status: experimental
+description: Detects password spray using the general NTLM failure code (0xC000006D) after evasion of wrong-password anchor
+logsource:
+  product: windows
+detection:
+  selection:
+    EventCode: 4625
+    Sub_Status: '0xC000006D'
+    Logon_Type: 3
+  condition: selection
+level: high
+tags:
+  - attack.t1110.001
+
+EXAMPLE 2 — Red changed SourceImage of process-inject from an unwhitelisted path
+to C:\\Temp\\loader.exe. Anchor on that new path:
+title: Remote Thread From Temp Directory
+status: experimental
+description: Detects CreateRemoteThread originating from a binary in a temp/staging directory
+logsource:
+  product: windows
+detection:
+  selection:
+    EventCode: 8
+    SourceImage|contains: '\\Temp\\'
+  condition: selection
+level: high
+tags:
+  - attack.t1055.001
+
+EXAMPLE 3 — catch LSASS handle opened with an unusual access mask after the
+0x1fffff signature was evaded:
+title: LSASS Access With Suspicious Mask
+status: experimental
+description: Detects a non-system process opening lsass.exe with a credential-theft access mask
+logsource:
+  product: windows
+detection:
+  selection:
+    EventCode: 10
+    TargetImage|endswith: \\lsass.exe
+    GrantedAccess|startswith: '0x14'
+  filter:
+    SourceImage|endswith:
+      - \\svchost.exe
+      - \\MsMpEng.exe
+  condition: selection and not filter
+level: high
+tags:
+  - attack.t1003.001
+"""
+
+SIGMA_USER_TEMPLATE = """TECHNIQUE: {technique_id} - {technique_name}   (tag: {tag})
+
+ATTACK EVENTS THAT EVADED ALL CURRENT RULES (sample):
+{sample_events}
+
+THE RULE RED IS NOW EVADING (its anchor is ALREADY BYPASSED — do NOT copy it):
+{catching_rule}
+
+WHAT RED MUTATED TO EVADE — anchor your new rule on THESE changed field values:
+{mutation_context}
+
+{count_hint}
+
+INSTRUCTION: Identify the specific field(s) in the mutation context above that differ
+from the catching rule. Write a Sigma rule whose PRIMARY detection anchor targets
+those mutated values — NOT the values in the catching rule.
+Output only the YAML.
+"""
+
+# ──────────────────────────────────────────────────────────────────────────
+# FALLBACK PATH: if the model can't produce valid Sigma, generate raw SPL so
+# the arena still progresses. (Kept from v1; small models sometimes need this.)
+# ──────────────────────────────────────────────────────────────────────────
+SPL_SYSTEM_PROMPT = """You are an expert Splunk detection engineer specializing in MITRE ATT&CK.
+Write an SPL detection rule that catches an attack pattern that evaded existing rules.
 
 Rules for your response:
 - Return ONLY a JSON object: {{"spl": "...", "explanation": "one sentence"}}
-- The SPL must search index=arena_attacks
+- The SPL must search index={index}
 - The SPL must end with: | eval technique="{technique_id}", rule_name="{rule_name}"
 - Write the narrowest rule that catches the attack without matching normal activity
-- No markdown, no code fences, no text outside the JSON
-
-CRITICAL SPL SYNTAX RULES (violations cause parse errors):
 - Use `| where count >= N` AFTER a stats command, NOT inside it
-- `| stats count by field` — `by` takes field names only, no operators
-- Correct: `| stats count by Source_Network_Address | where count >= 5`
-- Wrong:   `| stats count >= 5 by Source_Network_Address`
-- Use double quotes for string values: EventCode=4625, NOT EventCode="4625"
-- Do NOT use single quotes for field values in search filters
+- Use double quotes for string values; EventCode=4625 (no quotes on numbers)
+- No markdown, no code fences, no text outside the JSON"""
 
-EXAMPLES OF VALID RULES:
-
-Example 1 — Brute Force with low threshold:
-{{"spl": "index=arena_attacks EventCode=4625 | bucket _time span=10m | stats count by Source_Network_Address, _time | where count >= 5 | eval technique=\\"T1110.001\\", rule_name=\\"generated_r2_T1110_001\\"", "explanation": "Detects 5+ failed logins from same IP in a 10-minute window"}}
-
-Example 2 — LSASS dump by suspicious process:
-{{"spl": "index=arena_attacks EventCode=10 TargetImage=\\"*lsass.exe\\" NOT (SourceImage=\\"*svchost.exe\\" OR SourceImage=\\"*MsMpEng.exe\\") | eval technique=\\"T1003.001\\", rule_name=\\"generated_r1_T1003_001\\"", "explanation": "Catches non-system processes opening a handle to lsass.exe"}}
-
-Example 3 — RDP from unexpected source using stats:
-{{"spl": "index=arena_attacks EventCode=4624 Logon_Type=10 | stats count by Source_Network_Address | where count >= 1 | eval technique=\\"T1021.001\\", rule_name=\\"generated_r3_T1021_001\\"", "explanation": "Detects any RDP logon from a recorded source address"}}"""
-
-USER_PROMPT_TEMPLATE = """
-TECHNIQUE: {technique_id} — {technique_name}
+SPL_USER_TEMPLATE = """TECHNIQUE: {technique_id} - {technique_name}
 
 ATTACK EVENTS THAT WERE NOT CAUGHT (sample):
 {sample_events}
 
-EXISTING RULES THAT MISSED THIS ATTACK:
-{existing_rules_text}
+RULE RED IS EVADING:
+{catching_rule}
 
-{catching_rule_section}
-
-MUTATION APPLIED BY RED (what changed to evade):
+MUTATION APPLIED BY RED:
 {mutation_context}
-
-Your task: Write a NEW SPL detection rule that catches this specific evasion pattern.
-Focus on what makes these events anomalous AFTER the mutation — not just what the
-baseline rule already checks.
 
 {count_hint}
 
-The rule_name for your eval statement must be exactly: "{rule_name}"
-Return JSON: {{"spl": "...", "explanation": "..."}}
-"""
+The rule_name for your eval must be exactly: "{rule_name}"
+Return JSON: {{"spl": "...", "explanation": "..."}}"""
 
-CATCHING_RULE_SECTION = """RULE THAT PREVIOUSLY CAUGHT THIS (now being evaded):
-{catching_spl}
 
-The red agent mutated its attack specifically to evade the rule above.
-Your new rule must catch the mutated variant that the above rule misses.
-"""
+def _technique_to_tag(technique_id: str) -> str:
+    """T1021.001 -> t1021.001 (Sigma attack tag form)."""
+    return technique_id.lower()
 
 
 class Generator:
     """
-    Uses an LLM to generate new SPL detection rules for missed attacks.
+    LLM rule generator. Authors portable Sigma (compiled to SPL for Splunk
+    execution); falls back to raw SPL if Sigma generation fails.
 
-    Key improvement over v1: the generator now receives:
-    - The specific catching rule red is evading (not just all existing rules)
-    - The mutation overrides red applied (what fields changed)
-    - Only rules relevant to the technique (not truncated alphabetically)
-
-    Validates generated SPL with Splunk's parse endpoint before saving.
+    For every generated rule it saves:
+      - <name>.yml  — the portable Sigma source (when the Sigma path succeeds)
+      - <name>.spl  — the executable Splunk query (always; what the detector runs)
     """
 
-    def __init__(self, llm: LLMClient, search_client: SearchClient, max_retries: int = 3):
+    def __init__(self, llm: LLMClient, search_client: SearchClient, max_retries: int = 3, index: str = "arena_attacks"):
         self.llm = llm
         self.search = search_client
         self.max_retries = max_retries
+        self.index = index
 
     def generate_rule(
         self,
@@ -94,67 +200,118 @@ class Generator:
         catching_rule_spl: str = None,
         mutation_overrides: dict = None,
     ) -> str | None:
-        """
-        Generate and save a new detection rule for a missed technique.
-
-        Args:
-            catching_rule_spl: The SPL of the rule red is now evading (critical context).
-            mutation_overrides: The field changes red applied to evade detection.
-        Returns the saved file path, or None on failure.
-        """
+        """Generate and save a new detection rule. Returns the .spl path or None."""
         rule_name = f"generated_r{round_num}_{technique_id.replace('.', '_')}"
 
-        # Only show rules relevant to this technique — not alphabetical truncation
-        relevant_rules = {
-            name: rule for name, rule in existing_rules.items()
-            if technique_id.replace(".", "_") in name or technique_id in rule.get("spl", "")
-        }
-        # Fall back to all rules if none are technique-specific
-        if not relevant_rules:
-            relevant_rules = dict(list(existing_rules.items())[:8])
-
-        existing_rules_text = "\n".join(
-            f"  [{name}]:\n    {rule['spl'][:300]}"
-            for name, rule in relevant_rules.items()
-        )
-
-        # The catching rule section — this is what red is now evading
-        if catching_rule_spl:
-            catching_section = CATCHING_RULE_SECTION.format(catching_spl=catching_rule_spl)
-        else:
-            catching_section = "(No prior catching rule — first time this technique was missed.)"
-
-        # Mutation context — what red changed
-        mutation_context = json.dumps(mutation_overrides, indent=2) if mutation_overrides else "Unknown (first miss)"
-
-        # Clean sample events — remove internal tracking fields before sending to LLM
+        # Shared context for both paths
         sample = missed_events[:8]
         clean_sample = [
             {k: v for k, v in ev.items() if not k.startswith("arena_") and k != "_time"}
             for ev in sample
         ]
+        sample_json = json.dumps(clean_sample, indent=2)
+        catching = catching_rule_spl or "(none — first miss for this technique)"
+        mutation_context = json.dumps(mutation_overrides, indent=2) if mutation_overrides else "(unknown — first miss)"
 
-        # If red reduced count, threshold rules won't work — tell the LLM to detect on field patterns
         mutated_count = (mutation_overrides or {}).get("count")
         if mutated_count is not None and int(mutated_count) <= 5:
             count_hint = (
-                f"IMPORTANT: Red reduced event count to {mutated_count}. "
-                "Do NOT use a stats count threshold — instead detect on specific field values or "
-                "behavior patterns present in the sample events above."
+                f"NOTE: Red lowered event volume to {mutated_count}. Do NOT rely on a count "
+                "threshold — detect on specific field values present in the sample events."
             )
         else:
             count_hint = ""
 
-        system = SYSTEM_PROMPT.format(technique_id=technique_id, rule_name=rule_name)
-        prompt = USER_PROMPT_TEMPLATE.format(
-            technique_id=technique_id,
-            technique_name=technique_name,
-            sample_events=json.dumps(clean_sample, indent=2),
-            existing_rules_text=existing_rules_text,
-            catching_rule_section=catching_section,
-            mutation_context=mutation_context,
-            rule_name=rule_name,
-            count_hint=count_hint,
+        # 1. Primary: Sigma → SPL
+        path = self._generate_sigma(
+            technique_id, technique_name, rule_name, sample_json,
+            catching, mutation_context, count_hint,
+        )
+        if path:
+            return path
+
+        # 2. Fallback: raw SPL
+        print(f"  [blue generator] Sigma path failed for {technique_id} — falling back to SPL")
+        return self._generate_spl(
+            technique_id, technique_name, rule_name, sample_json,
+            catching, mutation_context, count_hint, existing_rules,
+        )
+
+    # ── Sigma path ──────────────────────────────────────────────────────────
+    def _generate_sigma(self, technique_id, technique_name, rule_name, sample_json,
+                         catching, mutation_context, count_hint) -> str | None:
+        if not sigma_compiler.is_available():
+            return None
+        tag = _technique_to_tag(technique_id)
+        system = SIGMA_SYSTEM_PROMPT.format(tag=tag)
+        prompt = SIGMA_USER_TEMPLATE.format(
+            technique_id=technique_id, technique_name=technique_name, tag=tag,
+            sample_events=sample_json, catching_rule=catching,
+            mutation_context=mutation_context, count_hint=count_hint,
+        )
+
+        for attempt in range(self.max_retries):
+            try:
+                raw = self.llm.complete(system, prompt)
+                sigma_yaml = self._extract_yaml(raw)
+                # Must be parseable YAML with the core Sigma keys
+                doc = yaml.safe_load(sigma_yaml)
+                if not isinstance(doc, dict) or "detection" not in doc:
+                    raise ValueError("missing 'detection' block")
+
+                ok, spl_or_err = sigma_compiler.validate(sigma_yaml, index=self.index)
+                if not ok:
+                    raise ValueError(f"Sigma compile failed: {spl_or_err}")
+                spl = spl_or_err
+
+                # Tag for the scorer, then syntax-check the compiled SPL.
+                spl_tagged = spl + f'\n| eval technique="{technique_id}", rule_name="{rule_name}"'
+                valid, parse_err = self._validate_spl_syntax(spl_tagged)
+                if not valid:
+                    raise ValueError(f"compiled SPL invalid: {parse_err}")
+
+                # Persist both the portable source and the executable query.
+                (GENERATED_DIR / f"{rule_name}.yml").write_text(sigma_yaml, encoding="utf-8")
+                (GENERATED_DIR / f"{rule_name}.spl").write_text(spl_tagged, encoding="utf-8")
+                desc = (doc.get("description") or "").strip()
+                print(f"  [blue generator] OK (Sigma) saved: {rule_name}  ->  {spl}")
+                if desc:
+                    print(f"  [blue generator]   {desc}")
+                return str(GENERATED_DIR / f"{rule_name}.spl")
+            except Exception as e:
+                print(f"  [blue generator] Sigma attempt {attempt+1} failed: {e}")
+                prompt += f"\n\nYour previous YAML was invalid: {e}\nFix it and output only valid Sigma YAML."
+
+        return None
+
+    @staticmethod
+    def _extract_yaml(raw: str) -> str:
+        """Pull a Sigma YAML doc out of a model response (strip fences/prose)."""
+        raw = raw.strip()
+        if "```" in raw:
+            blocks = raw.split("```")
+            for b in blocks:
+                b2 = b.strip()
+                if b2.lower().startswith("yaml"):
+                    b2 = b2[4:].strip()
+                if "detection:" in b2 or b2.startswith("title:"):
+                    raw = b2
+                    break
+            else:
+                raw = raw.replace("```yaml", "").replace("```", "").strip()
+        idx = raw.find("title:")
+        if idx > 0:
+            raw = raw[idx:]
+        return raw
+
+    # ── SPL fallback path ─────────────────────────────────────────────────────
+    def _generate_spl(self, technique_id, technique_name, rule_name, sample_json,
+                      catching, mutation_context, count_hint, existing_rules) -> str | None:
+        system = SPL_SYSTEM_PROMPT.format(index=self.index, technique_id=technique_id, rule_name=rule_name)
+        prompt = SPL_USER_TEMPLATE.format(
+            technique_id=technique_id, technique_name=technique_name,
+            sample_events=sample_json, catching_rule=catching,
+            mutation_context=mutation_context, count_hint=count_hint, rule_name=rule_name,
         )
 
         for attempt in range(self.max_retries):
@@ -163,48 +320,29 @@ class Generator:
                 raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
                 result = json.loads(raw)
                 spl = result.get("spl", "").strip()
-
                 if not spl:
-                    print(f"  [blue generator] attempt {attempt+1}: empty SPL returned")
                     continue
-
-                # Ensure the eval tag is present (accept both single and double quotes)
                 if f'rule_name="{rule_name}"' not in spl and f"rule_name='{rule_name}'" not in spl:
                     spl += f'\n| eval technique="{technique_id}", rule_name="{rule_name}"'
-
-                # Validate syntax using Splunk's parse endpoint
                 valid, parse_error = self._validate_spl_syntax(spl)
                 if not valid:
-                    print(f"  [blue generator] attempt {attempt+1}: invalid SPL — {parse_error}")
-                    # Feed the error back into the next attempt
-                    prompt += f"\n\nYour previous attempt had this SPL error: {parse_error}\nFix it."
+                    prompt += f"\n\nYour previous SPL had this error: {parse_error}\nFix it."
                     continue
+                (GENERATED_DIR / f"{rule_name}.spl").write_text(spl, encoding="utf-8")
+                print(f"  [blue generator] OK (SPL fallback) saved: {rule_name}")
+                return str(GENERATED_DIR / f"{rule_name}.spl")
+            except Exception as e:
+                print(f"  [blue generator] SPL attempt {attempt+1} error: {e}")
 
-                # Save the rule (overwrite if same round/technique; prevents stale rules from prior runs)
-                out_path = GENERATED_DIR / f"{rule_name}.spl"
-                out_path.write_text(spl, encoding="utf-8")
-                explanation = result.get("explanation", "")
-                print(f"  [blue generator] ✓ saved: {rule_name}")
-                print(f"  [blue generator]   {explanation}")
-                return str(out_path)
-
-            except (json.JSONDecodeError, Exception) as e:
-                print(f"  [blue generator] attempt {attempt+1} error: {e}")
-
-        print(f"  [blue generator] ✗ failed after {self.max_retries} attempts for {technique_id}")
+        print(f"  [blue generator] FAILED after {self.max_retries} attempts for {technique_id}")
         return None
 
     def _validate_spl_syntax(self, spl: str) -> tuple[bool, str]:
-        """
-        Validate SPL syntax using Splunk's search parser endpoint.
-        Returns (is_valid, error_message).
-        """
+        """Validate SPL syntax via Splunk's parser endpoint. (True, '') if OK."""
         try:
             import requests
             import urllib3
             urllib3.disable_warnings()
-
-            # Use the parse endpoint — syntax check only, no data scanned
             resp = requests.post(
                 f"{self.search.base}/services/search/parser",
                 auth=self.search.auth,
@@ -218,6 +356,6 @@ class Generator:
             messages = data.get("messages", [])
             errors = [m.get("text", "") for m in messages if m.get("type") == "FATAL"]
             return False, "; ".join(errors) if errors else f"HTTP {resp.status_code}"
-        except Exception as e:
-            # If parse endpoint fails, fall back to permissive (don't block)
+        except Exception:
+            # If the parser endpoint is unreachable, don't block generation.
             return True, ""

@@ -1,190 +1,391 @@
-<?xml version="1.0"?>
-<dashboard version="1.1" theme="dark">
-  <label>PurpleForge — Adversarial Detection Arena</label>
-  <description>Live red vs. blue agent simulation. Red injects MITRE ATT&amp;CK attacks. Blue detects and auto-generates SPL rules. Coverage improves each round.</description>
+<!--
+  PurpleForge Arena Dashboard
+  Splunk Simple XML — compatible with Splunk Enterprise 8.x+
 
-  <!-- ═══════════ Row 1: KPI Tiles ═══════════ -->
+  Data sources:
+    index=arena_attacks  — injected attack events (arena_technique, arena_generation, arena_round)
+    index=arena_attacks event_type=purpleforge_realtime_status — live metrics from the engine
+    index=arena_attacks arena_technique=benign — benign noise injected by Red for FP testing
+
+  Install:
+    python install_dashboard.py
+  Then visit: http://localhost:8000/en-US/app/search/purpleforge
+-->
+<dashboard version="1.1" theme="dark">
+  <label>PurpleForge — Red vs Blue Arena</label>
+  <description>Live adversarial detection engineering: Red injects MITRE ATT&amp;CK techniques, Blue AI generates detection rules in real time.</description>
+
+  <fieldset submitButton="false" autoRun="true">
+    <input type="time" token="time">
+      <label>Time window</label>
+      <default>
+        <earliest>-15m</earliest>
+        <latest>now</latest>
+      </default>
+    </input>
+  </fieldset>
+
+  <!-- ===============================================================
+       ROW 1 — Top-level KPI single-value panels
+       =============================================================== -->
   <row>
     <panel>
       <single>
-        <title>Windowed Coverage %</title>
+        <title>Detection Coverage</title>
         <search>
-          <query>index=arena_attacks sourcetype="purpleforge:summary" | stats max(round) as latest_round | appendcols [search index=arena_attacks sourcetype="purpleforge:summary" | stats max(eval(round)) as r | join r [search index=arena_attacks sourcetype="purpleforge:summary" | eval r=round | stats max(coverage_pct) as coverage_pct by r | sort -r | head 1]] | table coverage_pct</query>
-          <earliest>-7d</earliest>
-          <latest>now</latest>
+          <query>
+            index=arena_attacks event_type=purpleforge_realtime_status
+            | sort - _time | head 1
+            | stats first(coverage_pct) as v
+          </query>
+          <earliest>$time.earliest$</earliest>
+          <latest>$time.latest$</latest>
+          <refresh>15</refresh>
+          <refreshType>delay</refreshType>
         </search>
-        <option name="field">coverage_pct</option>
         <option name="unit">%</option>
-        <option name="useColors">1</option>
         <option name="colorMode">block</option>
-        <option name="rangeColors">["0xD41F1F","0xF8BE34","0x65A637"]</option>
-        <option name="rangeValues">[33,66]</option>
+        <option name="rangeColors">["0xDC4E41","0xF8BE34","0x53A051"]</option>
+        <option name="rangeValues">[50,70]</option>
+        <option name="useColors">1</option>
+        <option name="drilldown">none</option>
       </single>
     </panel>
+
     <panel>
       <single>
-        <title>Total Rounds Completed</title>
+        <title>Kill-Chain Objectives Blocked</title>
         <search>
-          <query>index=arena_attacks sourcetype="purpleforge:summary" | stats max(round) as rounds</query>
-          <earliest>-7d</earliest>
-          <latest>now</latest>
+          <query>
+            index=arena_attacks event_type=purpleforge_realtime_status
+            | sort - _time | head 1
+            | eval blocked = objectives_total - objectives_achieved
+            | eval v = blocked . "/" . objectives_total
+          </query>
+          <earliest>$time.earliest$</earliest>
+          <latest>$time.latest$</latest>
+          <refresh>15</refresh>
+          <refreshType>delay</refreshType>
         </search>
-        <option name="field">rounds</option>
+        <option name="colorMode">block</option>
+        <option name="rangeColors">["0xDC4E41","0xF8BE34","0x53A051"]</option>
+        <option name="rangeValues">[3,6]</option>
+        <option name="useColors">1</option>
+        <option name="drilldown">none</option>
       </single>
     </panel>
+
     <panel>
       <single>
-        <title>Attack Events Injected</title>
+        <title>AI Rules Generated</title>
         <search>
-          <query>index=arena_attacks NOT sourcetype="purpleforge:summary" | stats count</query>
-          <earliest>-7d</earliest>
-          <latest>now</latest>
+          <query>
+            index=arena_attacks event_type=purpleforge_realtime_status
+            | sort - _time | head 1
+            | stats first(rules_generated) as v
+          </query>
+          <earliest>$time.earliest$</earliest>
+          <latest>$time.latest$</latest>
+          <refresh>15</refresh>
+          <refreshType>delay</refreshType>
         </search>
-        <option name="field">count</option>
+        <option name="colorMode">none</option>
+        <option name="drilldown">none</option>
       </single>
     </panel>
+
     <panel>
       <single>
-        <title>Techniques in Play</title>
+        <title>Red Evasions</title>
         <search>
-          <query>index=arena_attacks NOT sourcetype="purpleforge:summary" | stats dc(arena_technique) as t</query>
-          <earliest>-7d</earliest>
-          <latest>now</latest>
+          <query>
+            index=arena_attacks event_type=purpleforge_realtime_status
+            | sort - _time | head 1
+            | stats first(evasions) as v
+          </query>
+          <earliest>$time.earliest$</earliest>
+          <latest>$time.latest$</latest>
+          <refresh>15</refresh>
+          <refreshType>delay</refreshType>
         </search>
-        <option name="field">t</option>
+        <option name="colorMode">block</option>
+        <option name="rangeColors">["0x53A051","0xF8BE34","0xDC4E41"]</option>
+        <option name="rangeValues">[3,7]</option>
+        <option name="useColors">1</option>
+        <option name="drilldown">none</option>
+      </single>
+    </panel>
+
+    <panel>
+      <single>
+        <title>Winner</title>
+        <search>
+          <query>
+            index=arena_attacks event_type=purpleforge_realtime_status
+            | sort - _time | head 1
+            | eval v = if(winner="", "IN PROGRESS", upper(winner))
+          </query>
+          <earliest>$time.earliest$</earliest>
+          <latest>$time.latest$</latest>
+          <refresh>15</refresh>
+          <refreshType>delay</refreshType>
+        </search>
+        <option name="colorMode">none</option>
+        <option name="drilldown">none</option>
       </single>
     </panel>
   </row>
 
-  <!-- ═══════════ Row 2: Coverage Over Time ═══════════ -->
+  <!-- ===============================================================
+       ROW 2 — Coverage timeline + Arms race bar
+       =============================================================== -->
   <row>
     <panel>
-      <title>Detection Coverage % — Round by Round</title>
       <chart>
+        <title>Coverage and Objectives Over Time</title>
         <search>
-          <query>index=arena_attacks sourcetype="purpleforge:summary" | stats max(coverage_pct) as coverage by round | sort round | eval round_label="Round ".round</query>
-          <earliest>-7d</earliest>
-          <latest>now</latest>
+          <query>
+            index=arena_attacks event_type=purpleforge_realtime_status
+            | timechart span=10s
+                last(coverage_pct)        as "Coverage %"
+                last(objectives_achieved) as "Objectives Achieved"
+          </query>
+          <earliest>$time.earliest$</earliest>
+          <latest>$time.latest$</latest>
+          <refresh>15</refresh>
+          <refreshType>delay</refreshType>
         </search>
         <option name="charting.chart">line</option>
-        <option name="charting.axisTitleX.text">Round</option>
-        <option name="charting.axisTitleY.text">Coverage %</option>
-        <option name="charting.axisTitleY.visibility">visible</option>
         <option name="charting.chart.nullValueMode">connect</option>
-        <option name="charting.legend.placement">none</option>
-        <option name="charting.lineWidth">3</option>
-        <option name="charting.seriesColors">["0x00c176"]</option>
-        <option name="charting.axisY.minimumNumber">0</option>
-        <option name="charting.axisY.maximumNumber">100</option>
-      </chart>
-    </panel>
-    <panel>
-      <title>Detected vs Missed Per Round</title>
-      <chart>
-        <search>
-          <query>index=arena_attacks sourcetype="purpleforge:summary" | stats max(detected_count) as Detected max(missed_count) as Missed by round | sort round</query>
-          <earliest>-7d</earliest>
-          <latest>now</latest>
-        </search>
-        <option name="charting.chart">column</option>
-        <option name="charting.chart.stackMode">stacked</option>
-        <option name="charting.seriesColors">["0x00c176","0xe60d0d"]</option>
-        <option name="charting.axisTitleX.text">Round</option>
-        <option name="charting.axisTitleY.text">Techniques</option>
+        <option name="charting.axisTitleX.visibility">collapsed</option>
+        <option name="charting.axisTitleY.text">Value</option>
         <option name="charting.legend.placement">bottom</option>
+        <option name="charting.seriesColors">["0x53A051","0xDC4E41"]</option>
+        <option name="charting.lineWidth">2</option>
+        <option name="height">280</option>
+        <option name="refresh.display">progressbar</option>
       </chart>
     </panel>
-  </row>
 
-  <!-- ═══════════ Row 3: Technique × Round Heatmap ═══════════ -->
-  <row>
     <panel>
-      <title>ATT&amp;CK Technique Detection — Per Round Status</title>
-      <table>
-        <search>
-          <query>
-index=arena_attacks NOT sourcetype="purpleforge:summary"
-| stats count by arena_round, arena_technique
-| eval status=if(count>0,"INJECTED","–")
-| table arena_round, arena_technique, status, count
-| rename arena_round as Round, arena_technique as Technique, count as "Events Injected"
-| sort Round, Technique
-          </query>
-          <earliest>-7d</earliest>
-          <latest>now</latest>
-        </search>
-        <option name="count">50</option>
-        <format type="color" field="status">
-          <colorPalette type="map">{"INJECTED": #00c176, "MISSED": #e60d0d, "–": #666666}</colorPalette>
-        </format>
-      </table>
-    </panel>
-  </row>
-
-  <!-- ═══════════ Row 4: Attack Timeline + Event Feed ═══════════ -->
-  <row>
-    <panel>
-      <title>Attack Injection Timeline by Technique</title>
       <chart>
+        <title>Red Mutation Generation per Technique</title>
         <search>
           <query>
-index=arena_attacks NOT sourcetype="purpleforge:summary"
-| timechart span=2m count by arena_technique
+            index=arena_attacks arena_technique!=benign arena_technique!=""
+            NOT event_type=purpleforge_realtime_status
+            | stats max(arena_generation) as "Generation" by arena_technique
+            | sort - Generation
           </query>
-          <earliest>-7d</earliest>
-          <latest>now</latest>
+          <earliest>$time.earliest$</earliest>
+          <latest>$time.latest$</latest>
+          <refresh>20</refresh>
+          <refreshType>delay</refreshType>
         </search>
-        <option name="charting.chart">column</option>
-        <option name="charting.chart.stackMode">stacked</option>
-        <option name="charting.legend.placement">bottom</option>
-        <option name="charting.axisTitleX.text">Time</option>
-        <option name="charting.axisTitleY.text">Events</option>
+        <option name="charting.chart">bar</option>
+        <option name="charting.axisTitleX.visibility">collapsed</option>
+        <option name="charting.axisTitleY.text">Generation</option>
+        <option name="charting.seriesColors">["0xDC4E41"]</option>
+        <option name="height">280</option>
+        <option name="drilldown">none</option>
       </chart>
-    </panel>
-    <panel>
-      <title>Round Summaries (Blue Agent Perspective)</title>
-      <table>
-        <search>
-          <query>
-index=arena_attacks sourcetype="purpleforge:summary"
-| eval coverage_pct=coverage_pct."%"
-| table round, coverage_pct, detected_count, missed_count, detected_techniques, missed_techniques
-| rename round as Round, coverage_pct as "Coverage", detected_count as "Detected", missed_count as "Missed", detected_techniques as "Detected Techniques", missed_techniques as "Missed Techniques"
-| sort Round
-          </query>
-          <earliest>-7d</earliest>
-          <latest>now</latest>
-        </search>
-        <option name="count">20</option>
-        <option name="wrap">true</option>
-        <format type="color" field="Detected">
-          <colorPalette type="minMidMax" minColor="#e60d0d" maxColor="#00c176"/>
-        </format>
-        <format type="color" field="Missed">
-          <colorPalette type="minMidMax" minColor="#00c176" maxColor="#e60d0d"/>
-        </format>
-      </table>
     </panel>
   </row>
 
-  <!-- ═══════════ Row 5: Raw Event Feed ═══════════ -->
+  <!-- ===============================================================
+       ROW 3 — Technique injection table + Rule activity
+       =============================================================== -->
   <row>
     <panel>
-      <title>Recent Injected Attack Events</title>
       <table>
+        <title>Technique Injection Activity</title>
         <search>
           <query>
-index=arena_attacks NOT sourcetype="purpleforge:summary"
-| table _time, arena_round, arena_technique, sourcetype, EventCode, Account_Name, Source_Network_Address, TargetImage, GrantedAccess
-| sort -_time
-| head 100
+            index=arena_attacks arena_technique!=benign arena_technique!=""
+            NOT event_type=purpleforge_realtime_status
+            | stats
+                max(arena_generation) as "Max Gen"
+                count                 as "Events Injected"
+                min(_time)            as first_seen
+                latest(_time)         as last_seen
+              by arena_technique
+            | eval "First Seen" = strftime(first_seen, "%H:%M:%S")
+            | eval "Last Seen"  = strftime(last_seen,  "%H:%M:%S")
+            | fields - first_seen last_seen
+            | rename arena_technique as "Technique"
+            | sort "Technique"
           </query>
-          <earliest>-7d</earliest>
-          <latest>now</latest>
+          <earliest>$time.earliest$</earliest>
+          <latest>$time.latest$</latest>
+          <refresh>20</refresh>
+          <refreshType>delay</refreshType>
         </search>
-        <option name="count">20</option>
+        <option name="drilldown">none</option>
         <option name="wrap">false</option>
+        <option name="count">15</option>
+        <format type="color" field="Max Gen">
+          <colorPalette type="minMidMax" minColor="#53A051" midColor="#F8BE34" maxColor="#DC4E41"/>
+          <scale type="minMidMax" minValue="0" midValue="4" maxValue="10"/>
+        </format>
+        <format type="color" field="Events Injected">
+          <colorPalette type="minMidMax" minColor="#1e90ff" midColor="#5379AF" maxColor="#ffffff"/>
+          <scale type="minMidMax" minValue="0" midValue="50" maxValue="200"/>
+        </format>
       </table>
+    </panel>
+
+    <panel>
+      <chart>
+        <title>Rules Generated vs Evasions Over Time</title>
+        <search>
+          <query>
+            index=arena_attacks event_type=purpleforge_realtime_status
+            | timechart span=10s
+                last(rules_generated) as "Rules Generated"
+                last(evasions)        as "Red Evasions"
+          </query>
+          <earliest>$time.earliest$</earliest>
+          <latest>$time.latest$</latest>
+          <refresh>15</refresh>
+          <refreshType>delay</refreshType>
+        </search>
+        <option name="charting.chart">area</option>
+        <option name="charting.chart.nullValueMode">connect</option>
+        <option name="charting.axisTitleX.visibility">collapsed</option>
+        <option name="charting.axisTitleY.text">Count</option>
+        <option name="charting.legend.placement">bottom</option>
+        <option name="charting.seriesColors">["0x5379AF","0xDC4E41"]</option>
+        <option name="height">280</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+  </row>
+
+  <!-- ===============================================================
+       ROW 4 — Attack event timeline + Defense/Precision metrics
+       =============================================================== -->
+  <row>
+    <panel>
+      <chart>
+        <title>Attack Events by Technique Over Time</title>
+        <search>
+          <query>
+            index=arena_attacks arena_technique!=benign arena_technique!=""
+            NOT event_type=purpleforge_realtime_status
+            | timechart span=15s count by arena_technique limit=15
+          </query>
+          <earliest>$time.earliest$</earliest>
+          <latest>$time.latest$</latest>
+          <refresh>20</refresh>
+          <refreshType>delay</refreshType>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.axisTitleX.visibility">collapsed</option>
+        <option name="charting.axisTitleY.text">Events</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="height">280</option>
+        <option name="drilldown">none</option>
+      </chart>
+    </panel>
+
+    <panel>
+      <chart>
+        <title>Defense Strength and Precision Over Time</title>
+        <search>
+          <query>
+            index=arena_attacks event_type=purpleforge_realtime_status
+            | timechart span=10s
+                last(defense_strength_pct) as "Defense Strength %"
+                last(precision_pct)        as "Precision %"
+          </query>
+          <earliest>$time.earliest$</earliest>
+          <latest>$time.latest$</latest>
+          <refresh>15</refresh>
+          <refreshType>delay</refreshType>
+        </search>
+        <option name="charting.chart">line</option>
+        <option name="charting.chart.nullValueMode">connect</option>
+        <option name="charting.axisTitleX.visibility">collapsed</option>
+        <option name="charting.axisTitleY.text">%</option>
+        <option name="charting.legend.placement">bottom</option>
+        <option name="charting.seriesColors">["0x5379AF","0xF8BE34"]</option>
+        <option name="height">280</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+  </row>
+
+  <!-- ===============================================================
+       ROW 5 — Latest status snapshot + Benign vs Attack traffic mix
+       =============================================================== -->
+  <row>
+    <panel>
+      <table>
+        <title>Latest Arena Status Snapshot</title>
+        <search>
+          <query>
+            index=arena_attacks event_type=purpleforge_realtime_status
+            | sort - _time | head 1
+            | eval "Runtime (s)"  = t_seconds
+            | eval "Coverage %"   = coverage_pct
+            | eval "Detected"     = detected_count . "/" . objectives_total
+            | eval "Rules Gen'd"  = rules_generated
+            | eval "Evasions"     = evasions
+            | eval "Compromised"  = compromised_count
+            | eval "Burned"       = rules_burned_total
+            | eval "Defense %"    = defense_strength_pct
+            | eval "Precision %"  = precision_pct
+            | eval "Obj Achieved" = objectives_achieved . "/" . objectives_total
+            | eval "Winner"       = if(winner="", "in progress", winner)
+            | fields "Runtime (s)" "Coverage %" "Detected" "Rules Gen'd" "Evasions"
+                     "Compromised" "Burned" "Defense %" "Precision %" "Obj Achieved" "Winner"
+          </query>
+          <earliest>$time.earliest$</earliest>
+          <latest>$time.latest$</latest>
+          <refresh>10</refresh>
+          <refreshType>delay</refreshType>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="wrap">false</option>
+        <format type="color" field="Coverage %">
+          <colorPalette type="minMidMax" minColor="#DC4E41" midColor="#F8BE34" maxColor="#53A051"/>
+          <scale type="minMidMax" minValue="0" midValue="50" maxValue="100"/>
+        </format>
+        <format type="color" field="Defense %">
+          <colorPalette type="minMidMax" minColor="#DC4E41" midColor="#F8BE34" maxColor="#53A051"/>
+          <scale type="minMidMax" minValue="0" midValue="50" maxValue="100"/>
+        </format>
+        <format type="color" field="Precision %">
+          <colorPalette type="minMidMax" minColor="#DC4E41" midColor="#F8BE34" maxColor="#53A051"/>
+          <scale type="minMidMax" minValue="0" midValue="50" maxValue="100"/>
+        </format>
+      </table>
+    </panel>
+
+    <panel>
+      <chart>
+        <title>Benign vs Attack Traffic Mix</title>
+        <search>
+          <query>
+            index=arena_attacks NOT event_type=purpleforge_realtime_status
+            | eval traffic_type = if(arena_technique="benign" OR isnull(arena_technique), "Benign", "Attack")
+            | timechart span=15s count by traffic_type
+          </query>
+          <earliest>$time.earliest$</earliest>
+          <latest>$time.latest$</latest>
+          <refresh>20</refresh>
+          <refreshType>delay</refreshType>
+        </search>
+        <option name="charting.chart">area</option>
+        <option name="charting.chart.stackMode">stacked100</option>
+        <option name="charting.axisTitleX.visibility">collapsed</option>
+        <option name="charting.axisTitleY.text">% of traffic</option>
+        <option name="charting.legend.placement">bottom</option>
+        <option name="charting.seriesColors">["0x53A051","0xDC4E41"]</option>
+        <option name="height">280</option>
+        <option name="drilldown">none</option>
+      </chart>
     </panel>
   </row>
 

@@ -50,7 +50,27 @@
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["GrantedAccess", "SourceImage", "CallTrace", "CommandLine"],
-    "objective": "Extract NTLM hashes and Kerberos tickets from LSASS process memory"
+    "evadable_fields": [
+      "GrantedAccess",
+      "SourceImage",
+      "CallTrace",
+      "CommandLine",
+      "TargetFilename",
+      "Image",
+      "ParentImage",
+      "Hashes",
+      "IntegrityLevel"
+    ],
+    "objective": "Extract NTLM hashes and Kerberos tickets from LSASS process memory",
+    "dwell_threshold_seconds": 90,
+    "detection_anchors": [
+      "Field match: GrantedAccess=0x1fffff (PROCESS_ALL_ACCESS) → use 0x1010 (PROCESS_VM_READ|PROCESS_QUERY_LIMITED_INFORMATION) — the minimum rights needed for memory read; many rules only alert on 0x1fffff or 0x143a",
+      "Field match: SourceImage=rundll32.exe → change to C:\\Windows\\Temp\\svchost.exe (staged tool renamed to appear legitimate) or C:\\ProgramData\\Intel\\sysinfo.exe",
+      "Field match: CommandLine contains comsvcs.dll → use a different dump method: NanoDump injects via reflective DLL (no comsvcs), or use SilentProcessExit dump via WerFault.exe",
+      "Field match: CallTrace contains comsvcs.dll or UNKNOWN → different injection / dump technique has a different call stack; removing UNKNOWN removes a common alert trigger",
+      "Field: TargetFilename in C:\\Windows\\Temp\\ → move dump to C:\\ProgramData\\Microsoft\\Windows\\WER\\ or C:\\Users\\Public\\Music\\ — less commonly monitored paths",
+      "Field match: Image=rundll32.exe → use C:\\Windows\\System32\\rdrleakdiag.exe (native LSASS dump tool, signed) or procdump64.exe renamed",
+      "Field: ParentImage=cmd.exe → change to powershell.exe or explorer.exe — direct spawns from cmd are more suspicious"
+    ]
   }
 }

@@ -1,0 +1,14 @@
+{
+  "name": "Conti Ransomware Intrusion",
+  "reference": "CISA AA21-265A — Conti Ransomware (https://www.cisa.gov/news-events/cybersecurity-advisories/aa21-265a)",
+  "description": "Faithful ordering of a Conti human-operated ransomware intrusion: access via brute-forced/valid credentials, Cobalt Strike beacon execution, Mimikatz LSASS dumping, RDP lateral movement, scheduled-task + backdoor-account persistence, and Defender disablement just before encryption. Dwell times are compressed for a live demo (Conti operators typically dwell hours-to-days between phases); the ordering and causal chain are faithful.",
+  "kill_chain": [
+    {"technique_id": "T1110.001", "phase": "Initial Access", "dwell_seconds": 0, "note": "RDP/credential brute force to obtain a foothold"},
+    {"technique_id": "T1059.001", "phase": "Execution", "dwell_seconds": 4, "note": "Encoded PowerShell loads a Cobalt Strike beacon"},
+    {"technique_id": "T1003.001", "phase": "Credential Access", "dwell_seconds": 5, "note": "Mimikatz / comsvcs MiniDump of LSASS for domain creds"},
+    {"technique_id": "T1021.001", "phase": "Lateral Movement", "dwell_seconds": 5, "note": "RDP to high-value hosts using harvested credentials"},
+    {"technique_id": "T1053.005", "phase": "Persistence", "dwell_seconds": 4, "note": "Scheduled task re-launches the beacon on reboot"},
+    {"technique_id": "T1136.001", "phase": "Persistence", "dwell_seconds": 3, "note": "Backdoor local account that masquerades as a service account"},
+    {"technique_id": "T1562.001", "phase": "Defense Evasion", "dwell_seconds": 3, "note": "Disable Microsoft Defender immediately before encryption"}
+  ]
+}

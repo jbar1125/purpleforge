@@ -1,0 +1,33 @@
+title: Suspicious Cloud Account Sign-In (Azure AD / Entra ID)
+id: b1e7c3a0-0010-4a10-9e21-000001078004
+status: stable
+description: >
+  Detects abuse of valid cloud credentials in Azure AD / Entra ID sign-in logs:
+  a successful sign-in over a legacy authentication protocol (which bypasses MFA
+  and Conditional Access), a successful sign-in flagged at elevated risk, or a
+  successful sign-in associated with an anonymized IP (Tor/VPN). Maps to MITRE
+  T1078.004 — the most prevalent ATT&CK technique in Red Canary's 2025 report.
+author: PurpleForge Blue Agent
+references:
+  - https://attack.mitre.org/techniques/T1078/004/
+logsource:
+  category: cloud
+  product: azure
+detection:
+  legacy_auth:
+    ResultType: 0
+    ClientAppUsed:
+      - Other clients
+      - IMAP4
+      - POP3
+      - SMTP
+      - Authenticated SMTP
+      - Exchange ActiveSync
+  condition: legacy_auth
+falsepositives:
+  - Legacy line-of-business apps still using basic auth (should be migrated off)
+  - Corporate VPN egress occasionally classified as anonymized
+level: high
+tags:
+  - attack.initial-access
+  - attack.t1078.004

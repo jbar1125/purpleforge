@@ -1,0 +1,13 @@
+{
+  "name": "SolarWinds / APT29 (SUNBURST) Supply-Chain Intrusion",
+  "reference": "CISA AA20-352A & Mandiant UNC2452 — SUNBURST (https://www.cisa.gov/news-events/cybersecurity-advisories/aa20-352a)",
+  "description": "Faithful ordering of the APT29/UNC2452 post-implant activity following the SolarWinds Orion supply-chain compromise: a stealthy, low-and-slow chain favoring in-memory execution and defense evasion. The real intrusion dwelled ~2 weeks before hands-on-keyboard activity and moved deliberately to avoid detection; dwell here is compressed for a live demo while preserving the stealth-first ordering (injection and registry persistence BEFORE noisy lateral movement).",
+  "kill_chain": [
+    {"technique_id": "T1059.001", "phase": "Execution", "dwell_seconds": 0, "note": "PowerShell tasking from the SUNBURST backdoor after dormancy"},
+    {"technique_id": "T1055.001", "phase": "Defense Evasion", "dwell_seconds": 6, "note": "In-memory DLL injection to run TEARDROP/Cobalt Strike without touching disk"},
+    {"technique_id": "T1003.001", "phase": "Credential Access", "dwell_seconds": 6, "note": "Selective LSASS credential theft for onward access"},
+    {"technique_id": "T1547.001", "phase": "Persistence", "dwell_seconds": 5, "note": "Registry Run-key persistence disguised as a legitimate updater"},
+    {"technique_id": "T1021.001", "phase": "Lateral Movement", "dwell_seconds": 6, "note": "Deliberate RDP movement to targeted high-value systems"},
+    {"technique_id": "T1562.001", "phase": "Defense Evasion", "dwell_seconds": 4, "note": "Disable endpoint security tooling on key hosts to extend dwell"}
+  ]
+}

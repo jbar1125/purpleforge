@@ -21,7 +21,7 @@
       "spread_seconds": 1
     },
     {
-      "note": "Special privileges assigned at logon — attacker account has SeDebugPrivilege or admin rights",
+      "note": "Special privileges assigned at logon — attacker account has admin rights",
       "sourcetype": "WinEventLog:Security",
       "template": {
         "EventCode": 4672,
@@ -51,7 +51,26 @@
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["Source_Network_Address", "Authentication_Package", "Workstation_Name"],
-    "objective": "Establish interactive RDP session to target host for hands-on-keyboard access"
+    "evadable_fields": [
+      "Source_Network_Address",
+      "Authentication_Package",
+      "Workstation_Name",
+      "Logon_Process",
+      "DestinationPort",
+      "Image",
+      "DestinationHostname",
+      "Privilege_List"
+    ],
+    "objective": "Establish interactive RDP session to target host for hands-on-keyboard access",
+    "dwell_threshold_seconds": 90,
+    "detection_anchors": [
+      "Field match: Logon_Type=10 (RemoteInteractive) IS the RDP anchor — cannot be changed without losing the technique",
+      "Field match: DestinationPort=3389 → change to 3388 or 13389 (some orgs move RDP to alternate ports); also port 3391 used by some RDP gateway configs",
+      "Field match: Image=mstsc.exe → use C:\\Windows\\SysWOW64\\mstsc.exe (32-bit client) or tscon.exe (session reconnect/hijack variant that doesn't open a new logon)",
+      "Field match: Logon_Process=User32 → change to NtLmSsp if NTLM is forced, or Kerberos for domain auth path",
+      "Field match: Authentication_Package=Negotiate → some rules key on this; NTLM or Kerberos are also valid values depending on the domain policy",
+      "Field: Source_Network_Address → use a different internal pivot IP that is in the known-good range for the target",
+      "Field: DestinationHostname → FQDN vs NetBIOS name vs empty (some rules match on hostname format)"
+    ]
   }
 }

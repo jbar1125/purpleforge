@@ -1,0 +1,78 @@
+{
+  "technique_id": "T1078.004",
+  "technique_name": "Valid Accounts: Cloud Accounts",
+  "tactic": "Initial Access",
+  "events": [
+    {
+      "note": "Legacy-auth sign-in success (IMAP4 / BAV2ROPC) — basic auth bypasses MFA and Conditional Access. #1 ATT&CK technique in Red Canary 2025 report.",
+      "sourcetype": "_json",
+      "template": {
+        "operationName": "Sign-in activity",
+        "category": "SigninLogs",
+        "UserPrincipalName": "{cloud_user}",
+        "UserId": "{cloud_user}",
+        "ResultType": 0,
+        "ResultDescription": "Success",
+        "IpAddress": "{cloud_ip}",
+        "Location": "{cloud_country}",
+        "AppDisplayName": "Office 365 Exchange Online",
+        "ClientAppUsed": "{legacy_client}",
+        "UserAgent": "BAV2ROPC",
+        "ConditionalAccessStatus": "notApplied",
+        "AuthenticationRequirement": "singleFactorAuthentication",
+        "RiskLevelDuringSignIn": "medium",
+        "RiskState": "atRisk"
+      },
+      "count": 1,
+      "spread_seconds": 2
+    },
+    {
+      "note": "Risky interactive sign-in from anonymized IP (Tor/VPN) that SUCCEEDED — Conditional Access gap",
+      "sourcetype": "_json",
+      "template": {
+        "operationName": "Sign-in activity",
+        "category": "SigninLogs",
+        "UserPrincipalName": "{cloud_user}",
+        "UserId": "{cloud_user}",
+        "ResultType": 0,
+        "ResultDescription": "Success",
+        "IpAddress": "{cloud_ip}",
+        "Location": "{cloud_country}",
+        "AppDisplayName": "Microsoft Azure PowerShell",
+        "ClientAppUsed": "Mobile Apps and Desktop clients",
+        "ConditionalAccessStatus": "success",
+        "AuthenticationRequirement": "singleFactorAuthentication",
+        "RiskLevelDuringSignIn": "high",
+        "RiskState": "atRisk",
+        "RiskEventTypes": "anonymizedIPAddress,unfamiliarFeatures"
+      },
+      "count": 1,
+      "spread_seconds": 3
+    }
+  ],
+  "mutation_hints": {
+    "evadable_fields": [
+      "ClientAppUsed",
+      "IpAddress",
+      "Location",
+      "RiskLevelDuringSignIn",
+      "RiskState",
+      "UserAgent",
+      "AppDisplayName",
+      "AuthenticationRequirement",
+      "ConditionalAccessStatus",
+      "RiskEventTypes"
+    ],
+    "objective": "Authenticate with valid cloud credentials while avoiding MFA and risk-based Conditional Access controls",
+    "dwell_threshold_seconds": 120,
+    "detection_anchors": [
+      "Field match: ClientAppUsed=IMAP4 or POP3 or 'Other clients' → change to 'Browser' or 'Mobile Apps and Desktop clients' — legacy-auth specific rules won't fire; the sign-in is still suspicious due to location/risk but avoids the legacy-auth detection anchor",
+      "Field match: RiskLevelDuringSignIn=high → change to medium or low — the Identity Protection risk engine scores based on threat intel; low-risk sign-ins from anonymized IPs are possible if the IP isn't yet in the blocklist",
+      "Field match: RiskEventTypes=anonymizedIPAddress → change to unfamiliarFeatures or remove the field entirely — some rules specifically anchor on anonymizedIPAddress (Tor/VPN indicator)",
+      "Field match: AuthenticationRequirement=singleFactorAuthentication → change to multiFactorAuthentication — if the tenant allows SSPR or soft MFA bypass, the sign-in could register as MFA-satisfied while still being attacker-controlled",
+      "Field match: ConditionalAccessStatus=notApplied → change to success — appears the sign-in passed CA evaluation (some rules only alert when CA didn't apply AND risk is high)",
+      "Field: Location → change from high-risk countries (RU/CN/KP/NG) to a medium-risk or unusual-but-not-flagged location — country-based rules have known blind spots",
+      "Field: AppDisplayName → change from 'Microsoft Azure PowerShell' (attacker-typical) to 'Microsoft Office' or 'SharePoint' — app-specific rules won't fire"
+    ]
+  }
+}

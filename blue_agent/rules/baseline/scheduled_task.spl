@@ -1,2 +1,2 @@
-index=arena_attacks (EventCode=4698) OR (EventCode=1 Image="*\\schtasks.exe" CommandLine="*/Create*") OR (EventCode=1 IntegrityLevel="System" (ParentImage="*\\taskeng.exe" OR ParentImage="*\\svchost.exe") CommandLine="*powershell*")
+index=arena_attacks EventCode=1 Image="*\\schtasks.exe" CommandLine="*/Create*"
 | eval technique="T1053.005", rule_name="scheduled_task_baseline"

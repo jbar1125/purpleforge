@@ -118,6 +118,59 @@ def generate_mcp_token(sc):
         return None
 
 
+# ── Optional production integrations (default-OFF; only checked when enabled) ──
+def check_caldera(cfg):
+    """Track 1 — real attack data via MITRE Caldera. Returns (ok, msg), or None if disabled."""
+    cal = cfg.get("caldera") or {}
+    if not cal.get("enabled"):
+        return None
+    from red_agent.caldera_client import CalderaClient, CalderaError
+    try:
+        client = CalderaClient(
+            base_url=cal["base_url"],
+            api_key=cal["api_key"],
+            verify_ssl=cal.get("verify_ssl", False),
+        )
+        if not client.health():
+            return False, "Server unreachable or api_key invalid — check base_url and api_key_red."
+        agents = client.list_agents()
+        if not agents:
+            return True, "Reachable, but 0 agents checked in — deploy a Sandcat agent on a lab host."
+        adv = cal.get("adversary_id", "")
+        warn = ""
+        if adv:
+            ids = {a.get("adversary_id") for a in client.list_adversaries()}
+            warn = "" if adv in ids else f" (warning: adversary_id {adv[:8]}… not found)"
+        return True, f"Reachable. {len(agents)} agent(s) checked in.{warn}"
+    except CalderaError as e:
+        return False, str(e)
+    except KeyError as e:
+        return False, f"missing caldera config key: {e}"
+
+
+def check_edr(cfg):
+    """Track 5 L3 — EDR ground truth (CrowdStrike Falcon). Returns (ok, msg), or None if disabled."""
+    edr_cfg = cfg.get("edr") or {}
+    if not edr_cfg.get("enabled"):
+        return None
+    from blue_agent.edr_client import EDRClient, EDRError
+    try:
+        client = EDRClient(
+            base_url=edr_cfg["base_url"],
+            client_id=edr_cfg["client_id"],
+            client_secret=edr_cfg["client_secret"],
+        )
+        if not client.health():
+            return False, "OAuth failed — check base_url (cloud region), client_id, client_secret."
+        # Pull one detection to prove the Detections:READ scope, not just that auth works.
+        sample = client.get_detections(limit=1)
+        return True, f"Falcon OAuth ok; detections read-path reachable ({len(sample)} recent sample)."
+    except EDRError as e:
+        return False, str(e)
+    except KeyError as e:
+        return False, f"missing edr config key: {e}"
+
+
 def main():
     console.print("\n[bold cyan]PurpleForge Setup Verification[/bold cyan]\n")
     cfg = load_config()
@@ -145,6 +198,16 @@ def main():
     # 5. MCP (optional)
     ok_mcp, msg_mcp = check_mcp(sc)
     results.append(("Splunk MCP Server (optional)", ok_mcp, msg_mcp))
+
+    # 6. MITRE Caldera (optional, Track 1) — only checked when caldera.enabled is true
+    cal_res = check_caldera(cfg)
+    if cal_res is not None:
+        results.append(("MITRE Caldera (optional)", cal_res[0], cal_res[1]))
+
+    # 7. EDR ground truth (optional, Track 5 L3) — only checked when edr.enabled is true
+    edr_res = check_edr(cfg)
+    if edr_res is not None:
+        results.append(("CrowdStrike EDR (optional)", edr_res[0], edr_res[1]))
 
     # Print table
     table = Table(show_header=True, header_style="bold")

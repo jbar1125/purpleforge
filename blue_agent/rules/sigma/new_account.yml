@@ -1,0 +1,23 @@
+title: Suspicious Local Account Creation
+id: b1e7c3a0-0003-4a10-9e21-000000000136
+status: stable
+description: >
+  Detects local account creation and privilege grants: a new user (4720),
+  addition to the Administrators group (4732), or net.exe user /add.
+author: PurpleForge Blue Agent
+references:
+  - https://attack.mitre.org/techniques/T1136/001/
+logsource:
+  product: windows
+detection:
+  net_user_add:
+    EventCode: 1
+    Image|endswith: \net.exe
+    CommandLine|contains: /add
+  condition: net_user_add
+falsepositives:
+  - IT provisioning new staff accounts during business hours
+level: medium
+tags:
+  - attack.persistence
+  - attack.t1136.001

@@ -1,5 +1,5 @@
 index=arena_attacks EventCode=4625
 | bucket _time span=5m
-| stats dc(Account_Name) as sprayed_accounts, count as total_failures, values(Sub_Status) as sub_statuses by Source_Network_Address, _time
-| where sprayed_accounts >= 3 OR total_failures >= 10
+| stats dc(Source_Network_Address) as spray_ips, dc(Account_Name) as sprayed_accounts, count as total_failures by _time
+| where total_failures >= 12 OR spray_ips >= 2
 | eval technique="T1110.001", rule_name="brute_force_baseline"

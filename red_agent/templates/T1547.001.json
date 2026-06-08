@@ -35,7 +35,24 @@
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["TargetObject", "Details", "Image", "CommandLine"],
-    "objective": "Execute malicious payload on every user logon without UAC prompt"
+    "evadable_fields": [
+      "TargetObject",
+      "Details",
+      "Image",
+      "CommandLine",
+      "ParentImage",
+      "User",
+      "IntegrityLevel"
+    ],
+    "objective": "Execute malicious payload on every user logon without UAC prompt",
+    "dwell_threshold_seconds": 120,
+    "detection_anchors": [
+      "Field match: Image=reg.exe → use C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe with Set-ItemProperty cmdlet; direct .NET registry API calls don't spawn reg.exe at all",
+      "Field match: TargetObject contains \\CurrentVersion\\Run\\ → use \\CurrentVersion\\RunOnce\\ (runs once then deletes itself, less persistent but avoids Run-key rules), or HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\\Userinit (different autorun path)",
+      "Wildcard match: TargetObject contains HKCU or HKLM followed by Run → use HKCU\\Environment\\UserInitMprLogonScript (logon script via environment variable; less commonly monitored)",
+      "Field: Details (the payload value) → use a signed binary with malicious arguments, or a path that looks like a legitimate update binary",
+      "Field: ParentImage → change the process that invokes reg.exe; cmd.exe is most suspicious; explorer.exe or svchost.exe as parent looks more benign",
+      "Field: IntegrityLevel=Medium → already at Medium for HKCU writes; High would be needed for HKLM; if switching to HKLM path, raise to High and adjust TargetObject accordingly"
+    ]
   }
 }

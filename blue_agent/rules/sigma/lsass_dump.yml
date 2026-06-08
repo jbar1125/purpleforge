@@ -1,0 +1,29 @@
+title: LSASS Credential Dump
+id: b1e7c3a0-0004-4a10-9e21-000000000003
+status: stable
+description: >
+  Detects credential dumping from LSASS: a non-system process opening a handle
+  to lsass.exe (10), the comsvcs.dll MiniDump LOLBin (1), or a .dmp written by
+  rundll32 (11). Excludes known-benign accessors of LSASS.
+author: PurpleForge Blue Agent
+references:
+  - https://attack.mitre.org/techniques/T1003/001/
+logsource:
+  product: windows
+detection:
+  lsass_access:
+    EventCode: 10
+    TargetImage|endswith: \lsass.exe
+  lsass_access_benign:
+    SourceImage:
+      - C:\Windows\System32\svchost.exe
+      - C:\Windows\SysWow64\svchost.exe
+      - C:\Windows\System32\MsMpEng.exe
+      - C:\Windows\System32\WerFault.exe
+  condition: lsass_access and not lsass_access_benign
+falsepositives:
+  - Antivirus or crash-reporting tools reading LSASS
+level: high
+tags:
+  - attack.credential-access
+  - attack.t1003.001

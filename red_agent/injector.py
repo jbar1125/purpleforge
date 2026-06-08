@@ -50,6 +50,18 @@ _SAMPLE_REG_KEYS = [
     "CTFMon",
     "AdobeAAMUpdater",
 ]
+# Cloud identity (Azure AD / M365) — UPNs, external/anonymizer source IPs,
+# foreign sign-in locations, and legacy auth clients that bypass MFA.
+_CLOUD_DOMAIN = "contoso.com"
+_CLOUD_IPS = [
+    "185.220.101.45",   # Tor exit
+    "45.155.205.233",   # bulletproof host
+    "91.219.236.166",   # known anonymizer range
+    "103.246.241.18",
+    "212.83.146.30",
+]
+_CLOUD_COUNTRIES = ["RU", "NG", "CN", "BR", "IR", "KP"]
+_LEGACY_CLIENTS = ["IMAP4", "POP3", "Other clients", "Authenticated SMTP", "Exchange ActiveSync"]
 
 # Spec-level keys that control injection behavior — not injected as event fields
 _SPEC_KEYS = {"count", "spread_seconds"}
@@ -88,6 +100,11 @@ def _make_context() -> dict:
         "process_id": f"0x{random.randint(0x400,0x3000):04x}",
         # Realistic GrantedAccess masks used by real dump tools
         "granted_access": random.choice(["0x1fffff", "0x143a", "0x1010", "0x1038"]),
+        # Cloud identity placeholders (Azure AD sign-in / M365 audit)
+        "cloud_user": f"{random.choice(_SAMPLE_USERS).replace('.', '')}@{_CLOUD_DOMAIN}",
+        "cloud_ip": random.choice(_CLOUD_IPS),
+        "cloud_country": random.choice(_CLOUD_COUNTRIES),
+        "legacy_client": random.choice(_LEGACY_CLIENTS),
     }
 
 
@@ -120,12 +137,16 @@ class Injector:
         technique_def: dict,
         round_num: int,
         overrides: dict = None,
+        generation: int = 0,
     ) -> list[dict]:
         """
         Inject all events for a technique definition.
         overrides: field overrides from the mutator.
           - Spec-level keys (count, spread_seconds) adjust injection behavior.
           - All other keys are merged into the event template fields.
+        generation: Red's mutation generation for this technique (0 = baseline).
+          Stamped on every event as arena_generation so the real-time engine can
+          tell whether Blue caught the LATEST mutation or only stale prior events.
         Returns the list of injected events (for scoring reference).
         """
         overrides = overrides or {}
@@ -158,6 +179,7 @@ class Injector:
                 ev = _fill_template(template, ctx)
                 ev["arena_round"] = round_num
                 ev["arena_technique"] = technique_id
+                ev["arena_generation"] = generation
                 # Spread events backwards in time to simulate a real attack burst.
                 # _time is promoted to the outer HEC envelope by HECClient.
                 ev["_time"] = now - (spread * (count - i) / max(count, 1))

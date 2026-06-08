@@ -1,2 +1,2 @@
-index=arena_attacks (EventCode=4624 Logon_Type=10) OR (EventCode=4672 Privilege_List="*SeDebugPrivilege*") OR (EventCode=3 DestinationPort=3389)
+index=arena_attacks EventCode=3 DestinationPort=3389
 | eval technique="T1021.001", rule_name="rdp_lateral_baseline"

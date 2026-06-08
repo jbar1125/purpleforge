@@ -4,7 +4,22 @@ rich>=13.0.0
 urllib3>=2.0.0
 splunk-sdk>=1.7.0   # Splunk Developer Tools prize — SDK-based search
 
+# Sigma — portable detection-as-code. One rule compiles to Splunk SPL, Elastic,
+# Sentinel, QRadar + 20 SIEMs ("integratable into any system anywhere").
+pysigma>=0.11.0
+pysigma-backend-splunk>=1.1.0
+pysigma-backend-elasticsearch>=1.0.0   # optional — proves cross-SIEM portability
+
+# Tests run standalone (python tests/test_detections.py) — pytest is OPTIONAL,
+# only needed if you prefer `python -m pytest tests/ -q`:
+# pytest>=8.0
+
 # LLM providers — only install what you use:
 google-generativeai>=0.7.0   # provider: gemini
 # Ollama uses its REST API directly — no library needed
 # splunk_hosted uses requests — no library needed
+
+# Human-in-the-loop rule review (rule_review package). The CORE — queue, dry-runner,
+# explainer, git deployer, and all of tests/test_rule_review.py — is pure stdlib + git.
+# Flask is ONLY needed for the optional web dashboard (python -m rule_review.server):
+# flask>=3.0

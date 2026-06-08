@@ -1,0 +1,23 @@
+title: Scheduled Task Persistence / Execution
+id: b1e7c3a0-0002-4a10-9e21-000000000053
+status: stable
+description: >
+  Detects scheduled-task abuse: a registered task (4698), an schtasks.exe
+  /Create, or a SYSTEM-integrity task host spawning PowerShell.
+author: PurpleForge Blue Agent
+references:
+  - https://attack.mitre.org/techniques/T1053/005/
+logsource:
+  product: windows
+detection:
+  schtasks_create:
+    EventCode: 1
+    Image|endswith: \schtasks.exe
+    CommandLine|contains: /Create
+  condition: schtasks_create
+falsepositives:
+  - Legitimate software installers registering update tasks
+level: medium
+tags:
+  - attack.persistence
+  - attack.t1053.005

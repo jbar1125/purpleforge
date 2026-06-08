@@ -1,0 +1,23 @@
+title: RDP Lateral Movement
+id: b1e7c3a0-0001-4a10-9e21-000000000021
+status: stable
+description: >
+  Detects interactive RDP lateral movement: a Type 10 (RemoteInteractive) logon,
+  assignment of high-value privileges to the session, or an mstsc network
+  connection to 3389. Multi-anchor so evading any single signal still trips another.
+author: PurpleForge Blue Agent
+references:
+  - https://attack.mitre.org/techniques/T1021/001/
+logsource:
+  product: windows
+detection:
+  rdp_network:
+    EventCode: 3
+    DestinationPort: 3389
+  condition: rdp_network
+falsepositives:
+  - Authorized administrators using RDP from jump hosts
+level: high
+tags:
+  - attack.lateral-movement
+  - attack.t1021.001

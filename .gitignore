@@ -6,4 +6,5 @@ venv/
 .env
 results/
 blue_agent/rules/generated/*.spl
+blue_agent/rules/generated/*.yml
 *.log

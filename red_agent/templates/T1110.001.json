@@ -40,7 +40,7 @@
       "spread_seconds": 60
     },
     {
-      "note": "Kerberos pre-auth failure — attacker is also trying Kerberos path (Sub_Status 0x18 = wrong password)",
+      "note": "Kerberos pre-auth failure — attacker also spraying via Kerberos path",
       "sourcetype": "WinEventLog:Security",
       "template": {
         "EventCode": 4771,
@@ -69,7 +69,27 @@
     }
   ],
   "mutation_hints": {
-    "evadable_fields": ["count", "spread_seconds", "Source_Network_Address", "Sub_Status", "Logon_Process"],
-    "objective": "Obtain valid credentials for lateral movement via password spray"
+    "evadable_fields": [
+      "count", "spread_seconds",
+      "Source_Network_Address",
+      "Sub_Status",
+      "Failure_Reason",
+      "Logon_Process",
+      "Authentication_Package",
+      "Logon_Type",
+      "Workstation_Name",
+      "Account_Domain"
+    ],
+    "objective": "Obtain valid credentials for lateral movement via password spray",
+    "dwell_threshold_seconds": 45,
+    "detection_anchors": [
+      "Global threshold: stats count as total_failures by _time (5-min bucket) where total_failures >= 12 → reduce count per spec below 12/2=6 (2 specs) so total events in window stays under 12; or use spread_seconds > 300 to push events into separate 5-min buckets",
+      "Spray-IPs indicator: stats dc(Source_Network_Address) as spray_ips where spray_ips >= 2 → if all events come from ONE IP (spray_ips=1) this branch does NOT fire; rotate Source_Network_Address across specs or use a single fixed IP for all events",
+      "Spray-accounts indicator: dc(Account_Name) per window; using many distinct Account_Name values across the spray events is still a secondary signal; reduce variety of target accounts",
+      "Field match: Sub_Status=0xC000006A (wrong password) → use 0xC000006D for general logon failure or 0xC0000064 for unknown username — still a failure but different sub-status",
+      "Field match: Authentication_Package=NTLM → switch to Negotiate; legitimate clients mostly use Negotiate which is less alarming than explicit NTLM",
+      "Field match: Logon_Type=3 (Network) → use Logon_Type=8 (NetworkCleartext) for plaintext-auth spray variant, or Logon_Type=2 to simulate interactive",
+      "Field match: Logon_Process=NtLmSsp → use Kerberos or User32 to alter the auth path fingerprint"
+    ]
   }
 }

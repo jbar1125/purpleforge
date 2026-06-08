@@ -1,0 +1,26 @@
+title: Encoded / Download-Cradle PowerShell
+id: b1e7c3a0-0006-4a10-9e21-000000000059
+status: stable
+description: >
+  Detects PowerShell abuse: an encoded/IEX/DownloadString command line (1),
+  a script block with download-cradle indicators (4104), or PowerShell making
+  an outbound web connection (3).
+author: PurpleForge Blue Agent
+references:
+  - https://attack.mitre.org/techniques/T1059/001/
+logsource:
+  product: windows
+detection:
+  scriptblock:
+    EventCode: 4104
+    ScriptBlockText|contains:
+      - DownloadString
+      - IEX
+      - WebClient
+  condition: scriptblock
+falsepositives:
+  - Administrative scripts using Invoke-WebRequest to internal endpoints
+level: high
+tags:
+  - attack.execution
+  - attack.t1059.001

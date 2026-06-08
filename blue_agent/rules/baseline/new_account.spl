@@ -1,2 +1,2 @@
-index=arena_attacks (EventCode=4720) OR (EventCode=4732 GroupName="Administrators") OR (EventCode=1 Image="*\\net.exe" CommandLine="*user*add*")
+index=arena_attacks EventCode=1 Image="*\\net.exe" CommandLine="*/add*"
 | eval technique="T1136.001", rule_name="new_account_baseline"

@@ -32,6 +32,21 @@ llm:
     endpoint: "https://YOUR_INSTANCE.splunkcloud.com/services/ml/models/foundation-sec-1.1-8b-instruct/predict"
     token: "YOUR_SPLUNK_CLOUD_TOKEN"
 
+  groq:
+    # Free tier: 6000 req/day, 30 req/min — get key at console.groq.com (no credit card)
+    api_key: "YOUR_GROQ_API_KEY"
+    model: llama-3.3-70b-versatile   # best quality; swap to llama-3.1-8b-instant for speed
+
+  # Track 4 — LLM data security. When present, every prompt is PII-stripped
+  # (usernames, internal IPs, hostnames, domains, GUIDs, SIDs, user paths) before
+  # it leaves the process and rehydrated in the rule that comes back; a hash-only,
+  # tamper-evident audit record is written per call. Omit/false to disable.
+  # For true on-prem privacy use provider: ollama (nothing leaves the network).
+  secure:
+    audit: true
+    audit_path: results/llm_audit.jsonl
+    store_preview: false       # true only in dev — keeps a 200-char preview, not hash-only
+
 arena:
   num_rounds: 5
   indexing_wait_seconds: 4   # seconds to wait after HEC inject before searching
@@ -45,3 +60,62 @@ arena:
     - T1059.001   # PowerShell: Encoded Command
     - T1055.001   # Process Injection: DLL Injection
     - T1562.001   # Impair Defenses: Disable Windows Defender
+    - T1078.004   # Valid Accounts: Cloud Accounts (Azure AD / Entra ID) — Red Canary 2025 #1
+    - T1114.003   # Email Collection: Email Forwarding Rule (M365 / BEC)
+
+  # Win conditions (turn-based and real-time modes)
+  win_conditions:
+    blue_coverage_pct: 70.0    # Blue wins by holding ≥70% coverage for the full duration
+    red_compromise_pct: 60.0   # Red wins by compromising (evade + burn) ≥60% of techniques
+
+  # Real-time engine tuning
+  realtime:
+    red_base_seconds: 6.0        # Red's normal attack cadence
+    red_urgent_seconds: 2.5      # Red's cadence after Blue catches a technique
+    blue_base_seconds: 4.0       # Blue's normal detection sweep cadence
+    blue_urgent_seconds: 2.0     # Blue's cadence after a miss
+    window_seconds: 120          # sliding detection window width
+    evasion_grace_seconds: 12.0  # seconds before a missed technique counts as evaded
+    metrics_every_seconds: 8.0   # scoreboard + dashboard feed interval
+    benign_every_seconds: 12.0   # benign traffic injection interval
+    poison_interval_seconds: 15.0 # Red's FP-flooding cadence (alert fatigue)
+    infer_mutations: false       # Track 5 moat: when true, Blue INFERS Red's field
+                                 # changes by diffing evading events vs. the last batch
+                                 # it caught — instead of being handed Red's overrides
+                                 # (production-realistic; the attacker never confesses)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PRODUCTION INTEGRATIONS (all OPTIONAL, all default-OFF)
+# The arena above is fully self-contained. These stanzas wire the production-hardening
+# modules to real infrastructure once you provision it. Each requires external setup —
+# see the run-book at the bottom of the named source file. Leaving enabled:false keeps
+# the demo byte-for-byte unchanged.
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Track 1 — real attack data via MITRE Caldera (red_agent/caldera_client.py).
+# Replaces synthetic HEC injection with real adversary emulation on lab hosts whose
+# Sysmon/forwarder telemetry flows into index_attacks the normal way.
+caldera:
+  enabled: false
+  base_url: "http://YOUR_CALDERA_HOST:8888"
+  api_key: "YOUR_CALDERA_RED_API_KEY"     # conf/local.yml -> api_key_red
+  adversary_id: "YOUR_ADVERSARY_PROFILE_ID"
+  group: ""                                # "" = all agents
+  verify_ssl: false
+
+# Track 5 L3 — EDR ground truth (blue_agent/edr_client.py). A second, authoritative
+# witness to what executed on the endpoint; corroborate() turns its view into Blue's
+# blind-spot list. CrowdStrike Falcon schema (Defender works with schema tweaks).
+edr:
+  enabled: false
+  base_url: "https://api.crowdstrike.com"  # or your Falcon cloud, e.g. api.us-2.crowdstrike.com
+  client_id: "YOUR_FALCON_CLIENT_ID"
+  client_secret: "YOUR_FALCON_CLIENT_SECRET"
+
+# Track 5 L4 — proactive detections from threat intel (blue_agent/threat_intel.py).
+# Point at advisory text/URLs or ATT&CK Navigator layer files; gap_analysis ranks the
+# techniques Blue should pre-build rules for. Offline-capable; no credentials needed.
+threat_intel:
+  enabled: false
+  navigator_layers: []     # e.g. ["intel/apt29_layer.json"]
+  advisory_urls: []        # e.g. ["https://www.cisa.gov/.../aa24-xxxa"]
