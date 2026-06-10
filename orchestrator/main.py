@@ -117,6 +117,17 @@ class Orchestrator:
             from red_agent.campaign import CampaignRunner, load_campaign
             self.campaign_runner = CampaignRunner(self.red, load_campaign(campaign_name))
 
+        # Optional production integrations (default-OFF, additive, turn-based only).
+        # Caldera swaps the synthetic injection for real adversary emulation; EDR adds
+        # blind-spot detection by cross-checking Splunk hits against an independent kernel
+        # witness. Both fail open: on bad config / unreachable server, log a warning and
+        # fall back so the demo never breaks.
+        self.caldera = self._init_caldera()
+        self.edr     = self._init_edr()
+        if self.caldera and self.campaign_runner:
+            console.print("[yellow]Both caldera.enabled and --campaign are set; "
+                          "Caldera real attacks win — synthetic campaign disabled.[/yellow]")
+
         self.num_rounds   = arena["num_rounds"]
         self.indexing_wait = arena.get("indexing_wait_seconds", 4)
         self.index_attacks = sc["index_attacks"]
@@ -129,6 +140,108 @@ class Orchestrator:
         sc = self.cfg["splunk"]
         self.search.create_index(sc["index_baseline"])
         self.search.create_index(sc["index_attacks"])
+
+    # ── Optional production integrations (additive, config-gated, fail-open) ────
+    def _init_caldera(self):
+        """Track 1: when caldera.enabled, returns a configured CalderaClient. On any
+        failure (missing key, unreachable server, bad api_key) logs a warning and returns
+        None so the orchestrator falls back to synthetic injection. Never raises."""
+        cfg = self.cfg.get("caldera") or {}
+        if not cfg.get("enabled"):
+            return None
+        try:
+            from red_agent.caldera_client import CalderaClient
+            client = CalderaClient(
+                base_url=cfg["base_url"],
+                api_key=cfg["api_key"],
+                verify_ssl=cfg.get("verify_ssl", False),
+            )
+            if not client.health():
+                console.print("[yellow]Caldera: unreachable or api_key invalid — "
+                              "falling back to synthetic injection.[/yellow]")
+                return None
+            console.print("[dim]Caldera integration enabled — Red will drive real "
+                          "adversary emulation against the lab host.[/dim]")
+            return client
+        except Exception as e:  # noqa: BLE001 — must fail open
+            console.print(f"[yellow]Caldera init failed ({e}) — "
+                          f"falling back to synthetic injection.[/yellow]")
+            return None
+
+    def _init_edr(self):
+        """Track 5 L3: when edr.enabled, returns a configured EDRClient. Same fail-open
+        contract as _init_caldera — bad config disables corroboration but never crashes
+        the arena."""
+        cfg = self.cfg.get("edr") or {}
+        if not cfg.get("enabled"):
+            return None
+        try:
+            from blue_agent.edr_client import EDRClient
+            client = EDRClient(
+                base_url=cfg["base_url"],
+                client_id=cfg["client_id"],
+                client_secret=cfg["client_secret"],
+            )
+            if not client.health():
+                console.print("[yellow]EDR: OAuth failed — "
+                              "corroboration disabled this run.[/yellow]")
+                return None
+            console.print("[dim]EDR corroboration enabled — Blue will cross-check Splunk "
+                          "hits against Falcon ground truth each round.[/dim]")
+            return client
+        except Exception as e:  # noqa: BLE001 — must fail open
+            console.print(f"[yellow]EDR init failed ({e}) — "
+                          f"corroboration disabled this run.[/yellow]")
+            return None
+
+    def _inject_via_caldera(self, round_num: int) -> dict:
+        """Track 1: drive Caldera's configured adversary, then return the
+        {tid: [executions]} dict the scorer already consumes. Caldera's lab-host
+        telemetry flows into Splunk via the Universal Forwarder, so Blue's Sigma
+        rules detect against real attack telemetry without changes.
+        Note: Caldera operations can take minutes — this blocks the round."""
+        cal_cfg = self.cfg["caldera"]
+        result = self.caldera.run_adversary(
+            adversary_id=cal_cfg["adversary_id"],
+            round_num=round_num,
+            group=cal_cfg.get("group", ""),
+        )
+        executions = result.get("executions") or []
+        console.print(f"  [red]Caldera op {result.get('operation_id', '?')[:8]}… "
+                      f"finished in state '{result.get('state', '?')}' — "
+                      f"{len(executions)} attack step(s) executed[/red]")
+        grouped: dict[str, list[dict]] = {}
+        for ex in executions:
+            tid = ex.get("technique_id")
+            if tid:
+                grouped.setdefault(tid, []).append(ex)
+        return grouped
+
+    def _corroborate_with_edr(self, round_start, splunk_hits: list[str]):
+        """Track 5 L3: fetch the EDR's view of what executed during this round and
+        cross-check against the techniques Blue's Splunk rules caught. Returns
+        {confirmed, blind_spots, log_only, edr_coverage_pct} or None on failure.
+        Blind spots are real attacks Splunk missed entirely — fed into the rule
+        generator queue downstream as proactive targets."""
+        from blue_agent.edr_client import corroborate, EDRError
+        iso = round_start.strftime("%Y-%m-%dT%H:%M:%SZ")
+        since = f"created_timestamp:>'{iso}'"
+        try:
+            truth = self.edr.ground_truth(since_filter=since)
+        except EDRError as e:
+            console.print(f"  [dim yellow]EDR fetch failed (continuing): {e}[/dim yellow]")
+            return None
+        result = corroborate(truth, splunk_hits)
+        if truth:
+            console.print(f"  [magenta]EDR truth: {len(truth)} behavior(s); "
+                          f"confirmed={len(result['confirmed'])} "
+                          f"blind-spots={len(result['blind_spots'])} "
+                          f"log-only={len(result['log_only'])} "
+                          f"corroboration={result['edr_coverage_pct']}%[/magenta]")
+            for tid in result["blind_spots"]:
+                console.print(f"  [bold magenta]🕵 EDR BLIND SPOT: {tid} — "
+                              f"kernel saw it, Splunk rules did NOT[/bold magenta]")
+        return result
 
     def run(self) -> None:
         console.print("\n[bold magenta]╔══════════════════════════════════════╗[/bold magenta]")
@@ -146,7 +259,11 @@ class Orchestrator:
             # ── 1. Red injects attacks + runs poison campaign ────────────────
             console.print("[bold red]● RED AGENT — injecting attacks[/bold red]")
             round_start = datetime.now(timezone.utc)
-            if self.campaign_runner:
+            if self.caldera:
+                # Real adversary emulation: telemetry flows from the lab host into
+                # Splunk via the Universal Forwarder; Blue's rules detect unchanged.
+                injected = self._inject_via_caldera(round_num=round_num)
+            elif self.campaign_runner:
                 injected = self.campaign_runner.run(
                     round_num=round_num, log=lambda m: console.print(f"  [red]{m}[/red]"))
             else:
@@ -193,6 +310,12 @@ class Orchestrator:
                     if p["fp"] > 0:
                         console.print(f"    [dim]FP[/dim] {n}: {p['fp']} benign hit(s) "
                                       f"(precision {p['precision']:.0%})")
+
+            # ── 4b. EDR corroboration — surface attacks Splunk's logs missed ──
+            # Blind spots become highest-priority targets for Step 7's rule generator.
+            edr_corroboration = None
+            if self.edr:
+                edr_corroboration = self._corroborate_with_edr(round_start, hits)
 
             # ── 5. Registry update — track rule health, check for burns ──────
             newly_burned = self.registry.record_batch(rule_precision, round_num=round_num)
@@ -249,6 +372,11 @@ class Orchestrator:
             all_need_rules = set(misses)
             for tid in self.blue.pop_burned_replacement_queue():
                 all_need_rules.add(tid)  # replacement for burned rule
+            # EDR blind spots are real attacks Splunk missed entirely — the highest-
+            # priority targets to close (kernel-confirmed misses, not synthetic guesses).
+            if edr_corroboration:
+                for tid in edr_corroboration["blind_spots"]:
+                    all_need_rules.add(tid)
 
             if all_need_rules:
                 console.print("[bold blue]● BLUE AGENT — generating/replacing detection rules[/bold blue]")
@@ -315,6 +443,9 @@ class Orchestrator:
                 "rules_burned": newly_burned,
                 "compromised_techniques": list(compromised),
                 "game_state_counts": game_counts,
+                "attack_source": ("caldera" if self.caldera
+                                  else ("campaign" if self.campaign_runner else "synthetic")),
+                "edr_corroboration": edr_corroboration,    # None when edr disabled
                 "winner": self._winner,
             }
             self.round_logs.append(round_log)
@@ -343,6 +474,17 @@ class Orchestrator:
                 "game_state_evading": game_counts.get("evading", 0),
                 "game_state_compromised": game_counts.get("compromised", 0),
                 "winner": self._winner or "none",
+                "attack_source": ("caldera" if self.caldera
+                                  else ("campaign" if self.campaign_runner else "synthetic")),
+                "edr_enabled": bool(self.edr),
+                "edr_confirmed_count": (len(edr_corroboration["confirmed"])
+                                        if edr_corroboration else 0),
+                "edr_blind_spot_count": (len(edr_corroboration["blind_spots"])
+                                         if edr_corroboration else 0),
+                "edr_log_only_count": (len(edr_corroboration["log_only"])
+                                       if edr_corroboration else 0),
+                "edr_coverage_pct": (edr_corroboration["edr_coverage_pct"]
+                                     if edr_corroboration else None),
             }
             self.hec.send_events([summary_event], index=self.index_attacks, sourcetype="purpleforge:summary")
             console.print(f"  Coverage: [bold]{cov}%[/bold] | "
