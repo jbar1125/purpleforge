@@ -140,6 +140,30 @@ class CoverageMatrix:
         covered = sum(1 for r in self.records.values() if self._is_covered(r))
         return round(covered / len(self.records) * 100, 1)
 
+    def weighted_coverage_percent(self) -> float:
+        """
+        Weighted coverage: same windowed logic, but each technique's contribution
+        is proportional to its real-world prevalence_weight from TECHNIQUES.
+
+        A 95%-weight technique like T1003.001 (LSASS) counts far more than a
+        55%-weight technique like T1114.003 (Email Forwarding) — so a ruleset that
+        covers the high-value techniques shows a higher score even if it misses niche ones.
+
+        Formula: sum(weight_i * is_covered_i) / sum(weight_i)
+        Returns 0.0 when no techniques have been injected.
+        """
+        total_weight = 0.0
+        covered_weight = 0.0
+        for tid, rec in self.records.items():
+            meta = TECHNIQUES.get(tid, {})
+            weight = float(meta.get("prevalence_weight", 0.5))  # default 0.5 for unknown techniques
+            total_weight += weight
+            if self._is_covered(rec):
+                covered_weight += weight
+        if total_weight == 0.0:
+            return 0.0
+        return round(covered_weight / total_weight * 100, 1)
+
     def coverage_percent_ever(self) -> float:
         """Legacy metric: % ever detected at least once. Kept for comparison."""
         if not self.records:
@@ -152,6 +176,7 @@ class CoverageMatrix:
 
         return {
             "coverage_percent": self.coverage_percent(),
+            "weighted_coverage_percent": self.weighted_coverage_percent(),
             "coverage_percent_ever_detected": self.coverage_percent_ever(),
             "coverage_window_rounds": COVERAGE_WINDOW,
             "coverage_threshold": COVERAGE_THRESHOLD,

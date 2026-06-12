@@ -137,6 +137,46 @@ Output only the YAML.
 """
 
 # ──────────────────────────────────────────────────────────────────────────
+# CRITIQUE PASS: after the LLM produces a structurally valid Sigma rule, a
+# second LLM call verifies detection logic before the rule is saved.
+# This catches over-generalised rules that technically compile but would alert
+# on everything, and rules whose anchors don't match the evaded event fields.
+# The critique is FAST (single call, short prompt) and FAIL-OPEN: if the
+# critique call itself errors, we accept the rule rather than losing it.
+# ──────────────────────────────────────────────────────────────────────────
+_CRITIQUE_SYSTEM = """You are a senior detection-engineering reviewer.
+Given a Sigma rule and the attack events it should catch, evaluate the rule.
+
+Respond with EXACTLY one of these two formats — nothing else:
+  PASS
+  FAIL: <one sentence explaining the specific problem>
+
+A rule PASSES if:
+  - Its detection field values appear in (or are a logical generalisation of) the attack events
+  - It does NOT match only on EventCode alone (that catches too much)
+  - It is not a copy of the existing catching rule (different anchor)
+
+A rule FAILS if any of the following are true:
+  - The anchor field values don't appear in the sample events
+  - The only anchor is EventCode (no additional field filter)
+  - It re-uses the same anchor as the catching rule Red already evaded
+  - The detection block has no condition or is otherwise syntactically wrong
+
+Be strict. Vague rules that could match any event of that EventCode always FAIL."""
+
+_CRITIQUE_USER = """SIGMA RULE TO REVIEW:
+{sigma_yaml}
+
+ATTACK EVENTS THAT MUST BE CAUGHT:
+{sample_events}
+
+EXISTING RULE THAT WAS ALREADY EVADED (do NOT re-anchor on this):
+{catching_rule}
+
+Does the rule above correctly catch the attack events without being over-broad?
+Respond with PASS or FAIL: <reason>."""
+
+# ──────────────────────────────────────────────────────────────────────────
 # FALLBACK PATH: if the model can't produce valid Sigma, generate raw SPL so
 # the arena still progresses. (Kept from v1; small models sometimes need this.)
 # ──────────────────────────────────────────────────────────────────────────
@@ -270,11 +310,22 @@ class Generator:
                 if not valid:
                     raise ValueError(f"compiled SPL invalid: {parse_err}")
 
+                # Critique pass: a second LLM call verifies detection logic before
+                # we commit the rule. If the critique rejects, feed the reason back
+                # as a correction and retry. Fail-open: critique errors → accept rule.
+                critique_ok, critique_reason = self._critique_rule(
+                    sigma_yaml=sigma_yaml,
+                    sample_events=sample_json,
+                    catching_rule=catching,
+                )
+                if not critique_ok:
+                    raise ValueError(f"critique rejected: {critique_reason}")
+
                 # Persist both the portable source and the executable query.
                 (GENERATED_DIR / f"{rule_name}.yml").write_text(sigma_yaml, encoding="utf-8")
                 (GENERATED_DIR / f"{rule_name}.spl").write_text(spl_tagged, encoding="utf-8")
                 desc = (doc.get("description") or "").strip()
-                print(f"  [blue generator] OK (Sigma) saved: {rule_name}  ->  {spl}")
+                print(f"  [blue generator] OK (Sigma+critique) saved: {rule_name}  ->  {spl}")
                 if desc:
                     print(f"  [blue generator]   {desc}")
                 return str(GENERATED_DIR / f"{rule_name}.spl")
@@ -283,6 +334,45 @@ class Generator:
                 prompt += f"\n\nYour previous YAML was invalid: {e}\nFix it and output only valid Sigma YAML."
 
         return None
+
+    def _critique_rule(
+        self,
+        sigma_yaml: str,
+        sample_events: str,
+        catching_rule: str,
+    ) -> tuple[bool, str]:
+        """
+        Second-pass LLM critique of a generated Sigma rule.
+
+        Returns (True, '') if the rule passes review, or (False, reason) if it
+        should be rejected and regenerated. Fails open — any exception returns True
+        so the arena never stalls on a broken critique call.
+        """
+        try:
+            prompt = _CRITIQUE_USER.format(
+                sigma_yaml=sigma_yaml,
+                sample_events=sample_events,
+                catching_rule=catching_rule,
+            )
+            response = self.llm.complete(_CRITIQUE_SYSTEM, prompt).strip()
+
+            # Parse the verdict: first word on first line must be PASS or FAIL
+            first_line = response.splitlines()[0].strip() if response else ""
+            if first_line.upper().startswith("PASS"):
+                print(f"  [blue critique] PASS")
+                return True, ""
+            elif first_line.upper().startswith("FAIL"):
+                reason = first_line[4:].lstrip(": ").strip() or "unspecified critique failure"
+                print(f"  [blue critique] FAIL — {reason}")
+                return False, reason
+            else:
+                # Unexpected format — fail open, don't block the rule
+                print(f"  [blue critique] unexpected response format ('{first_line[:60]}') — accepting rule")
+                return True, ""
+        except Exception as e:
+            # Critique call failed (network, token limit, etc.) — accept the rule
+            print(f"  [blue critique] error during critique ({e}) — accepting rule as-is")
+            return True, ""
 
     @staticmethod
     def _extract_yaml(raw: str) -> str:

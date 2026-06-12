@@ -432,6 +432,7 @@ class Orchestrator:
 
             # ── 11. Log round + Splunk summary event ──────────────────────────
             cov = self.coverage.coverage_percent()
+            weighted_cov = self.coverage.weighted_coverage_percent()
             game_counts = self.coverage.game_state_counts()
             round_log = {
                 "round": round_num,
@@ -459,6 +460,7 @@ class Orchestrator:
                 "event_type": "purpleforge_round_summary",
                 "round": round_num,
                 "coverage_pct": cov,
+                "weighted_coverage_pct": weighted_cov,
                 "detected_count": len(hits),
                 "missed_count": len(misses),
                 "compromised_count": len(compromised),
@@ -487,7 +489,7 @@ class Orchestrator:
                                      if edr_corroboration else None),
             }
             self.hec.send_events([summary_event], index=self.index_attacks, sourcetype="purpleforge:summary")
-            console.print(f"  Coverage: [bold]{cov}%[/bold] | "
+            console.print(f"  Coverage: [bold]{cov}%[/bold] (weighted: [bold]{weighted_cov}%[/bold]) | "
                           f"Compromised: [bold red]{len(compromised)}[/bold red] | "
                           f"Defense: [bold]{health['defense_strength_pct']}%[/bold]")
 

@@ -55,11 +55,20 @@ class RuleRegistry:
     Args:
         burn_threshold: precision below this → DEGRADED (default 0.40)
         burn_consecutive: rounds at DEGRADED before BURNED (default 2)
+        fp_gate_threshold: max false-positive rate allowed for a new rule's FIRST
+            precision measurement; if FP rate > this, the rule is immediately burned
+            before it can flood the SOC with noise (default 0.05 = 5%)
     """
 
-    def __init__(self, burn_threshold: float = 0.40, burn_consecutive: int = 2):
+    def __init__(
+        self,
+        burn_threshold: float = 0.40,
+        burn_consecutive: int = 2,
+        fp_gate_threshold: float = 0.05,
+    ):
         self.burn_threshold = burn_threshold
         self.burn_consecutive = burn_consecutive
+        self.fp_gate_threshold = fp_gate_threshold
         self._rules: dict[str, RuleHealth] = {}
 
     # ── state accessors ────────────────────────────────────────────────────────
@@ -102,6 +111,7 @@ class RuleRegistry:
         if h.state == RuleState.BURNED:
             return RuleState.BURNED
 
+        is_first_measurement = len(h.precision_history) == 0
         h.precision_history.append(precision)
         h.total_tp += tp
         h.total_fp += fp
@@ -110,6 +120,21 @@ class RuleRegistry:
         if precision is None:
             # No classifiable hits this round — don't penalize, but don't reset degraded streak
             return h.state
+
+        # FP promotion gate: if a brand-new rule's very first measurement shows
+        # FP rate > fp_gate_threshold, reject it immediately rather than letting it
+        # run for burn_consecutive rounds — a noisy rule on first fire means the LLM
+        # over-generalized the pattern. Better to burn it now and let Blue regenerate.
+        if is_first_measurement and precision is not None:
+            fp_rate = 1.0 - precision  # precision = TP/(TP+FP), so FP rate = 1 - precision
+            if fp_rate > self.fp_gate_threshold:
+                h.state = RuleState.BURNED
+                h.burned_at_round = round_num
+                print(
+                    f"  [registry] FP gate: '{rule_name}' rejected on first fire — "
+                    f"FP rate {fp_rate:.1%} > {self.fp_gate_threshold:.0%} threshold"
+                )
+                return RuleState.BURNED
 
         if precision < self.burn_threshold:
             h.consecutive_degraded += 1
@@ -152,6 +177,7 @@ class RuleRegistry:
         return {
             "burn_threshold": self.burn_threshold,
             "burn_consecutive": self.burn_consecutive,
+            "fp_gate_threshold": self.fp_gate_threshold,
             "rules": {
                 name: {
                     "state": h.state.value,
@@ -170,6 +196,7 @@ class RuleRegistry:
         reg = cls(
             burn_threshold=data.get("burn_threshold", 0.40),
             burn_consecutive=data.get("burn_consecutive", 2),
+            fp_gate_threshold=data.get("fp_gate_threshold", 0.05),
         )
         for name, r in data.get("rules", {}).items():
             h = RuleHealth(rule_name=name)
