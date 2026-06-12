@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PurpleForge — Continuous Adversarial Detection Engineering</title>
+  <meta name="description" content="PurpleForge closes the 79% MITRE ATT&CK detection gap automatically. Two AI agents — one attacks, one defends — in a continuous arms race inside your Splunk environment. Rules improve every round." />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #0a0a0f;
+      --bg-card:    #0f0f1a;
+      --bg-card2:   #13131f;
+      --border:     #1e1e2e;
+      --border-hi:  #2a2a3e;
+      --purple:     #8b5cf6;
+      --purple-dim: #6d28d9;
+      --purple-lo:  #1e1040;
+      --red:        #ef4444;
+      --red-lo:     #2d0a0a;
+      --blue:       #3b82f6;
+      --blue-lo:    #0a1630;
+      --green:      #22c55e;
+      --text:       #e2e8f0;
+      --text-dim:   #94a3b8;
+      --text-faint: #475569;
+      --mono:       'JetBrains Mono', monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+    body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; line-height: 1.6; }
+
+    /* ── Nav ── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(10,10,15,0.85); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 2rem; height: 60px;
+    }
+    .nav-logo { font-weight: 800; font-size: 1.1rem; letter-spacing: -0.02em; }
+    .nav-logo span { color: var(--purple); }
+    .nav-links { display: flex; gap: 2rem; }
+    .nav-links a { color: var(--text-dim); text-decoration: none; font-size: 0.9rem; transition: color 0.15s; }
+    .nav-links a:hover { color: var(--text); }
+    .nav-cta {
+      background: var(--purple); color: #fff; padding: 0.45rem 1.1rem;
+      border-radius: 6px; font-size: 0.85rem; font-weight: 600;
+      text-decoration: none; transition: background 0.15s;
+    }
+    .nav-cta:hover { background: var(--purple-dim); }
+
+    /* ── Layout helpers ── */
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 2rem; }
+    section { padding: 6rem 0; }
+
+    /* ── Hero ── */
+    .hero { padding: 7rem 0 5rem; text-align: center; position: relative; overflow: hidden; }
+    .hero::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 900px 500px at 50% -100px, rgba(139,92,246,0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      background: var(--purple-lo); border: 1px solid rgba(139,92,246,0.4);
+      color: #c4b5fd; font-size: 0.8rem; font-weight: 500;
+      padding: 0.35rem 0.9rem; border-radius: 999px; margin-bottom: 1.8rem;
+    }
+    .hero-badge-dot { width: 7px; height: 7px; background: var(--green); border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.6;transform:scale(1.3)} }
+
+    h1 {
+      font-size: clamp(2.4rem, 5vw, 3.8rem);
+      font-weight: 800; line-height: 1.1; letter-spacing: -0.03em;
+      margin-bottom: 1.4rem;
+    }
+    h1 .highlight { color: var(--purple); }
+    .hero-sub {
+      font-size: 1.2rem; color: var(--text-dim); max-width: 640px; margin: 0 auto 2.8rem;
+      line-height: 1.7;
+    }
+    .hero-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+    .btn-primary {
+      background: var(--purple); color: #fff; padding: 0.75rem 1.8rem;
+      border-radius: 8px; font-weight: 600; font-size: 1rem;
+      text-decoration: none; transition: background 0.15s, transform 0.1s;
+    }
+    .btn-primary:hover { background: var(--purple-dim); transform: translateY(-1px); }
+    .btn-secondary {
+      background: transparent; color: var(--text-dim); padding: 0.75rem 1.8rem;
+      border-radius: 8px; font-weight: 500; font-size: 1rem;
+      text-decoration: none; border: 1px solid var(--border-hi);
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-secondary:hover { border-color: var(--purple); color: var(--text); }
+
+    /* ── Stat bar ── */
+    .stats {
+      background: var(--bg-card); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+      padding: 2.5rem 0;
+    }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2rem; text-align: center; }
+    .stat-num { font-size: 2.5rem; font-weight: 800; letter-spacing: -0.03em; }
+    .stat-num.red  { color: var(--red); }
+    .stat-num.purple { color: var(--purple); }
+    .stat-num.green { color: var(--green); }
+    .stat-num.blue  { color: var(--blue); }
+    .stat-label { color: var(--text-dim); font-size: 0.9rem; margin-top: 0.25rem; }
+    .stat-source { color: var(--text-faint); font-size: 0.75rem; margin-top: 0.2rem; }
+
+    /* ── Problem ── */
+    h2 { font-size: clamp(1.8rem, 3vw, 2.6rem); font-weight: 800; letter-spacing: -0.02em; margin-bottom: 1rem; }
+    .section-label { color: var(--purple); font-size: 0.8rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 0.75rem; }
+    .problem-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 3rem; }
+    .problem-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 1.8rem;
+    }
+    .problem-card h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.6rem; }
+    .problem-card p { color: var(--text-dim); font-size: 0.9rem; line-height: 1.6; }
+    .problem-tag {
+      display: inline-block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em;
+      padding: 0.2rem 0.6rem; border-radius: 4px; margin-bottom: 1rem; text-transform: uppercase;
+    }
+    .tag-red   { background: var(--red-lo);  color: var(--red); }
+    .tag-orange { background: #2d1500; color: #f97316; }
+    .tag-yellow { background: #2d2200; color: #eab308; }
+
+    /* ── How it works ── */
+    .flow { background: var(--bg-card); border-radius: 16px; padding: 2.5rem; margin-top: 3rem; border: 1px solid var(--border); }
+    .flow-row { display: flex; gap: 1rem; align-items: flex-start; margin-bottom: 1.5rem; }
+    .flow-row:last-child { margin-bottom: 0; }
+    .flow-step {
+      min-width: 32px; height: 32px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.85rem; flex-shrink: 0; margin-top: 0.1rem;
+    }
+    .step-red   { background: var(--red-lo);  color: var(--red);  border: 1px solid var(--red); }
+    .step-blue  { background: var(--blue-lo); color: var(--blue); border: 1px solid var(--blue); }
+    .step-green { background: #082010;        color: var(--green);border: 1px solid var(--green); }
+    .step-purple{ background: var(--purple-lo);color: var(--purple);border: 1px solid var(--purple); }
+    .flow-content h4 { font-size: 1rem; font-weight: 600; margin-bottom: 0.3rem; }
+    .flow-content p  { color: var(--text-dim); font-size: 0.875rem; line-height: 1.55; }
+    .flow-arrow {
+      text-align: center; color: var(--text-faint); font-size: 1.2rem;
+      margin: -0.5rem 0; padding-left: 1rem;
+    }
+
+    /* ── Terminal demo ── */
+    .terminal {
+      background: #050508; border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden; margin-top: 3rem;
+    }
+    .terminal-bar {
+      background: var(--bg-card); padding: 0.8rem 1.2rem;
+      display: flex; align-items: center; gap: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot-red { background: #ef4444; } .dot-yellow { background: #f59e0b; } .dot-green { background: #22c55e; }
+    .terminal-bar span { color: var(--text-faint); font-size: 0.8rem; margin-left: 0.5rem; font-family: var(--mono); }
+    .terminal-body { padding: 1.5rem; font-family: var(--mono); font-size: 0.83rem; line-height: 1.8; overflow-x: auto; }
+    .t-dim    { color: var(--text-faint); }
+    .t-purple { color: #a78bfa; }
+    .t-red    { color: #f87171; }
+    .t-blue   { color: #60a5fa; }
+    .t-green  { color: #4ade80; }
+    .t-yellow { color: #fbbf24; }
+    .t-white  { color: #f1f5f9; }
+
+    /* ── Comparison table ── */
+    .compare-wrap { overflow-x: auto; margin-top: 3rem; }
+    table { width: 100%; border-collapse: collapse; }
+    thead tr { border-bottom: 2px solid var(--border-hi); }
+    th { padding: 1rem 1.2rem; text-align: left; font-size: 0.85rem; color: var(--text-dim); font-weight: 600; }
+    th.pf { color: var(--purple); }
+    td { padding: 0.85rem 1.2rem; font-size: 0.88rem; border-bottom: 1px solid var(--border); color: var(--text-dim); }
+    td:first-child { color: var(--text); font-weight: 500; }
+    td.yes { color: var(--green); font-weight: 600; }
+    td.no  { color: var(--text-faint); }
+    td.partial { color: var(--yellow, #eab308); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--bg-card2); }
+
+    /* ── Pricing ── */
+    .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; margin-top: 3rem; }
+    .pricing-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 2rem; position: relative;
+    }
+    .pricing-card.featured { border-color: var(--purple); background: linear-gradient(135deg, var(--purple-lo) 0%, var(--bg-card) 60%); }
+    .pricing-badge {
+      position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+      background: var(--purple); color: #fff; font-size: 0.7rem; font-weight: 700;
+      padding: 0.2rem 0.8rem; border-radius: 999px; letter-spacing: 0.05em; white-space: nowrap;
+    }
+    .pricing-tier { font-size: 0.8rem; font-weight: 600; color: var(--text-dim); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 0.5rem; }
+    .pricing-price { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; }
+    .pricing-price span { font-size: 1rem; font-weight: 400; color: var(--text-dim); }
+    .pricing-desc { color: var(--text-dim); font-size: 0.875rem; margin: 0.75rem 0 1.5rem; line-height: 1.5; }
+    .pricing-list { list-style: none; display: flex; flex-direction: column; gap: 0.6rem; }
+    .pricing-list li { font-size: 0.875rem; color: var(--text-dim); display: flex; align-items: flex-start; gap: 0.6rem; }
+    .pricing-list li::before { content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0; }
+    .pricing-cta {
+      display: block; margin-top: 2rem; text-align: center; padding: 0.65rem;
+      border-radius: 8px; font-weight: 600; font-size: 0.9rem; text-decoration: none; transition: 0.15s;
+    }
+    .pricing-cta.outline { border: 1px solid var(--border-hi); color: var(--text-dim); }
+    .pricing-cta.outline:hover { border-color: var(--purple); color: var(--text); }
+    .pricing-cta.solid { background: var(--purple); color: #fff; }
+    .pricing-cta.solid:hover { background: var(--purple-dim); }
+
+    /* ── Techniques ── */
+    .techniques-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.75rem; margin-top: 2.5rem; }
+    .technique-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 8px; padding: 1rem 1.2rem;
+      display: flex; align-items: center; gap: 1rem;
+    }
+    .tactic-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .tactic-credential { background: #ef4444; }
+    .tactic-lateral    { background: #f97316; }
+    .tactic-persistence{ background: #8b5cf6; }
+    .tactic-execution  { background: #3b82f6; }
+    .tactic-evasion    { background: #06b6d4; }
+    .tactic-initial    { background: #22c55e; }
+    .tactic-collection { background: #f59e0b; }
+    .technique-id   { font-family: var(--mono); font-size: 0.75rem; color: var(--text-faint); white-space: nowrap; }
+    .technique-name { font-size: 0.875rem; color: var(--text); font-weight: 500; }
+    .technique-tactic { font-size: 0.75rem; color: var(--text-faint); }
+
+    /* ── CTA section ── */
+    .cta-section {
+      background: linear-gradient(135deg, var(--purple-lo) 0%, var(--bg-card) 100%);
+      border: 1px solid rgba(139,92,246,0.3); border-radius: 16px;
+      padding: 4rem; text-align: center; margin: 2rem 0;
+    }
+    .cta-section h2 { margin-bottom: 1rem; }
+    .cta-section p { color: var(--text-dim); max-width: 560px; margin: 0 auto 2rem; }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border); padding: 3rem 0;
+      display: flex; flex-wrap: wrap; gap: 1rem;
+      justify-content: space-between; align-items: center;
+      color: var(--text-faint); font-size: 0.85rem;
+    }
+    footer a { color: var(--text-dim); text-decoration: none; }
+    footer a:hover { color: var(--text); }
+    .footer-links { display: flex; gap: 1.5rem; }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .nav-links { display: none; }
+      section { padding: 4rem 0; }
+      .hero { padding: 4rem 0 3rem; }
+      .compare-wrap { font-size: 0.8rem; }
+      th, td { padding: 0.7rem 0.8rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">Purple<span>Forge</span></div>
+  <div class="nav-links">
+    <a href="#how-it-works">How It Works</a>
+    <a href="#compare">vs. Alternatives</a>
+    <a href="#pricing">Pricing</a>
+    <a href="https://github.com/jbar1125/purpleforge" target="_blank">GitHub</a>
+    <a href="docs/business_plan.md">Business</a>
+  </div>
+  <a class="nav-cta" href="https://github.com/jbar1125/purpleforge">Get Started Free →</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge">
+      <div class="hero-badge-dot"></div>
+      Open Beta — now accepting design partners
+    </div>
+    <h1>Your detection rules are<br />static. <span class="highlight">Attackers aren't.</span></h1>
+    <p class="hero-sub">
+      PurpleForge runs a continuous AI arms race inside your Splunk environment.
+      Red attacks, Blue defends, rules improve every round — automatically.
+    </p>
+    <div class="hero-actions">
+      <a class="btn-primary" href="https://github.com/jbar1125/purpleforge">Start for Free</a>
+      <a class="btn-secondary" href="#how-it-works">See How It Works ↓</a>
+    </div>
+  </div>
+</section>
+
+<!-- STATS -->
+<div class="stats">
+  <div class="container">
+    <div class="stats-grid">
+      <div>
+        <div class="stat-num red">79%</div>
+        <div class="stat-label">of ATT&CK techniques undetected</div>
+        <div class="stat-source">CardinalOps, 2.5M+ log sources, 2025</div>
+      </div>
+      <div>
+        <div class="stat-num red">13%</div>
+        <div class="stat-label">of existing detection rules are broken</div>
+        <div class="stat-source">non-functional, will never fire</div>
+      </div>
+      <div>
+        <div class="stat-num purple">$200K</div>
+        <div class="stat-label">average red team engagement cost</div>
+        <div class="stat-source">happens 1–2× per year</div>
+      </div>
+      <div>
+        <div class="stat-num green">69</div>
+        <div class="stat-label">detection-as-code tests shipped</div>
+        <div class="stat-source">all passing, open source</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PROBLEM -->
+<section id="problem">
+  <div class="container">
+    <div class="section-label">The Problem</div>
+    <h2>Why static defenses fail</h2>
+    <p style="color:var(--text-dim);max-width:620px;line-height:1.7;">
+      Detection engineering is a reactive discipline. Rules are written after incidents,
+      tested once, and forgotten. Attackers study those rules and stay outside their patterns.
+    </p>
+    <div class="problem-grid">
+      <div class="problem-card">
+        <div class="problem-tag tag-red">Coverage Gap</div>
+        <h3>You can't detect what you can't see</h3>
+        <p>The average enterprise SIEM detects 21 of every 100 MITRE ATT&CK techniques.
+        That means for 79 techniques an adversary can use right now, your SIEM has no rule to catch it —
+        and most teams don't know which 79.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-tag tag-orange">Rule Decay</div>
+        <h3>Rules go stale in weeks</h3>
+        <p>Volt Typhoon lived in US critical infrastructure for years — not through zero-days, but because
+        they knew what detection rules look for and stayed outside those patterns. Static rules
+        are a published roadmap for evasion.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-tag tag-yellow">Episodic Testing</div>
+        <h3>Annual red teams don't close gaps</h3>
+        <p>A $150K red team report lands on a desk. 90% of the findings are never implemented because
+        detection engineers are busy. Between engagements, new gaps open. The cycle continues.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how-it-works" style="background:var(--bg-card2); border-top:1px solid var(--border); border-bottom:1px solid var(--border);">
+  <div class="container">
+    <div class="section-label">The Solution</div>
+    <h2>A continuous arms race inside your SIEM</h2>
+    <p style="color:var(--text-dim);max-width:600px;line-height:1.7;">
+      Two AI agents fight 24/7. One attacks. One defends. Every miss generates a new rule.
+      Every catch forces a mutation. Coverage improves every round.
+    </p>
+    <div class="flow">
+      <div class="flow-row">
+        <div class="flow-step step-red">R</div>
+        <div class="flow-content">
+          <h4>Red Agent injects synthetic ATT&CK-mapped attacks</h4>
+          <p>Realistic log events — identical to real attacker telemetry — injected into
+          <code style="background:var(--bg);padding:0.1em 0.4em;border-radius:3px;font-size:0.85em;">index=arena_attacks</code>
+          via Splunk HEC with realistic timing spread.</p>
+        </div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-row">
+        <div class="flow-step step-blue">B</div>
+        <div class="flow-content">
+          <h4>Blue Agent executes Sigma detection rules</h4>
+          <p>Every rule runs in parallel against the injected data. Each technique is scored
+          hit/miss with a kill-chain dwell timer — <em>did detection happen before the attacker achieved
+          their objective?</em></p>
+        </div>
+      </div>
+      <div class="flow-arrow">↓ (on miss)</div>
+      <div class="flow-row">
+        <div class="flow-step step-blue">B</div>
+        <div class="flow-content">
+          <h4>Blue generates a new Sigma rule via LLM</h4>
+          <p>The missed attack events are passed to an LLM with the existing rules as context.
+          A new Sigma YAML rule is generated, compiled to SPL, and queued for human review
+          before promotion to production.</p>
+        </div>
+      </div>
+      <div class="flow-arrow">↓ (on catch)</div>
+      <div class="flow-row">
+        <div class="flow-step step-red">R</div>
+        <div class="flow-content">
+          <h4>Red mutates to evade — and remembers</h4>
+          <p>Red's Mutation Inferencer reads Blue's active ruleset and learns what patterns Blue
+          is watching. Future attack templates route around those patterns. Red gets harder as
+          Blue gets better.</p>
+        </div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-row">
+        <div class="flow-step step-green">✓</div>
+        <div class="flow-content">
+          <h4>Coverage improves — measurably, exportably</h4>
+          <p>After each run, an ATT&CK Navigator JSON layer shows exactly which techniques
+          are now detected, which rules cover them, and the before/after delta. Ready to
+          present to a CISO or auditor.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Terminal demo -->
+    <div class="terminal">
+      <div class="terminal-bar">
+        <div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div>
+        <span>purpleforge — python -m orchestrator.main --mode realtime --duration 600 --clean</span>
+      </div>
+      <div class="terminal-body">
+<span class="t-dim">[ 00:00 ]</span> <span class="t-purple">PurpleForge v1.0  ·  11 techniques  ·  realtime mode  ·  600s</span>
+<span class="t-dim">─────────────────────────────────────────────────────────</span>
+<span class="t-dim">[ 00:06 ]</span> <span class="t-red">RED  </span> <span class="t-white">T1110.001</span> inject  <span class="t-dim">· 80 failed logons from 198.51.100.42</span>
+<span class="t-dim">[ 00:09 ]</span> <span class="t-blue">BLUE </span> <span class="t-white">T1110.001</span> <span class="t-green">DETECTED</span>  <span class="t-dim">· brute_force.sigma  dwell=3s  ✓ in time</span>
+<span class="t-dim">[ 00:15 ]</span> <span class="t-red">RED  </span> <span class="t-white">T1110.001</span> mutate  <span class="t-dim">· spreading across 12 source IPs, 900s window</span>
+<span class="t-dim">[ 00:21 ]</span> <span class="t-blue">BLUE </span> <span class="t-white">T1110.001</span> <span class="t-yellow">MISS</span>      <span class="t-dim">· threshold exceeded by distribution (no single IP)</span>
+<span class="t-dim">[ 00:22 ]</span> <span class="t-purple">GEN  </span> generating new rule for T1110.001 evasion variant …
+<span class="t-dim">[ 00:28 ]</span> <span class="t-purple">GEN  </span> <span class="t-green">rule ready</span>  <span class="t-dim">· brute_force_distributed.sigma  → review queue</span>
+<span class="t-dim">[ 00:35 ]</span> <span class="t-white">REVIEW</span> analyst approved brute_force_distributed.sigma  <span class="t-green">→ ACTIVE</span>
+<span class="t-dim">[ 00:42 ]</span> <span class="t-red">RED  </span> <span class="t-white">T1003.001</span> inject  <span class="t-dim">· LSASS access via svchost.exe  GrantedAccess=0x1fffff</span>
+<span class="t-dim">[ 00:45 ]</span> <span class="t-blue">BLUE </span> <span class="t-white">T1003.001</span> <span class="t-green">DETECTED</span>  <span class="t-dim">· lsass_dump.sigma  dwell=3s  ✓ in time</span>
+<span class="t-dim">  …  </span>
+<span class="t-dim">[ 09:58 ]</span> <span class="t-purple">─── ROUND COMPLETE ─────────────────────────────────────</span>
+<span class="t-dim">[ 09:58 ]</span> <span class="t-white">Coverage:  </span><span class="t-red">3/11</span> <span class="t-dim">→</span> <span class="t-green">9/11</span>  <span class="t-dim">  (+54.5 pp this run)</span>
+<span class="t-dim">[ 09:58 ]</span> <span class="t-white">Rules gen: </span><span class="t-purple">6 new Sigma rules</span>  <span class="t-dim">· 4 approved, 2 pending review</span>
+<span class="t-dim">[ 09:58 ]</span> <span class="t-white">Navigator:  </span><span class="t-dim">results/navigator_layer_20260612_095800.json</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ATT&CK TECHNIQUES -->
+<section>
+  <div class="container">
+    <div class="section-label">Coverage</div>
+    <h2>11 ATT&CK techniques, 5 tactics — v1.0</h2>
+    <p style="color:var(--text-dim);max-width:600px;line-height:1.7;">
+      v2 roadmap adds 30+ techniques across all 14 ATT&CK tactics, cloud attack modules,
+      and Active Directory log sources.
+    </p>
+    <div class="techniques-grid">
+      <div class="technique-card">
+        <div class="tactic-dot tactic-credential"></div>
+        <div>
+          <div class="technique-id">T1110.001</div>
+          <div class="technique-name">Brute Force: Password Guessing</div>
+          <div class="technique-tactic">Credential Access</div>
+        </div>
+      </div>
+      <div class="technique-card">
+        <div class="tactic-dot tactic-lateral"></div>
+        <div>
+          <div class="technique-id">T1021.001</div>
+          <div class="technique-name">Remote Services: RDP</div>
+          <div class="technique-tactic">Lateral Movement</div>
+        </div>
+      </div>
+      <div class="technique-card">
+        <div class="tactic-dot tactic-persistence"></div>
+        <div>
+          <div class="technique-id">T1053.005</div>
+          <div class="technique-name">Scheduled Task/Job</div>
+          <div class="technique-tactic">Persistence</div>
+        </div>
+      </div>
+      <div class="technique-card">
+        <div class="tactic-dot tactic-persistence"></div>
+        <div>
+          <div class="technique-id">T1136.001</div>
+          <div class="technique-name">Create Account: Local Account</div>
+          <div class="technique-tactic">Persistence</div>
+        </div>
+      </div>
+      <div class="technique-card">
+        <div class="tactic-dot tactic-credential"></div>
+        <div>
+          <div class="technique-id">T1003.001</div>
+          <div class="technique-name">OS Credential Dumping: LSASS</div>
+          <div class="technique-tactic">Credential Access</div>
+        </div>
+      </div>
+      <div class="technique-card">
+        <div class="tactic-dot tactic-persistence"></div>
+        <div>
+          <div class="technique-id">T1547.001</div>
+          <div class="technique-name">Boot/Logon Autostart: Registry Run Keys</div>
+          <div class="technique-tactic">Persistence</div>
+        </div>
+      </div>
+      <div class="technique-card">
+        <div class="tactic-dot tactic-execution"></div>
+        <div>
+          <div class="technique-id">T1059.001</div>
+          <div class="technique-name">PowerShell (encoded + IEX)</div>
+          <div class="technique-tactic">Execution</div>
+        </div>
+      </div>
+      <div class="technique-card">
+        <div class="tactic-dot tactic-evasion"></div>
+        <div>
+          <div class="technique-id">T1055.001</div>
+          <div class="technique-name">Process Injection: DLL Injection</div>
+          <div class="technique-tactic">Defense Evasion</div>
+        </div>
+      </div>
+      <div class="technique-card">
+        <div class="tactic-dot tactic-evasion"></div>
+        <div>
+          <div class="technique-id">T1562.001</div>
+          <div class="technique-name">Impair Defenses: Disable Defender</div>
+          <div class="technique-tactic">Defense Evasion</div>
+        </div>
+      </div>
+      <div class="technique-card">
+        <div class="tactic-dot tactic-initial"></div>
+        <div>
+          <div class="technique-id">T1078.004</div>
+          <div class="technique-name">Valid Accounts: Cloud (Azure AD)</div>
+          <div class="technique-tactic">Initial Access</div>
+        </div>
+      </div>
+      <div class="technique-card">
+        <div class="tactic-dot tactic-collection"></div>
+        <div>
+          <div class="technique-id">T1114.003</div>
+          <div class="technique-name">Email Forwarding Rule (M365)</div>
+          <div class="technique-tactic">Collection</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMPARISON -->
+<section id="compare" style="background:var(--bg-card2); border-top:1px solid var(--border); border-bottom:1px solid var(--border);">
+  <div class="container">
+    <div class="section-label">vs. Alternatives</div>
+    <h2>The only tool that fixes what it finds</h2>
+    <p style="color:var(--text-dim);max-width:620px;line-height:1.7;">
+      Every BAS tool hands you a report. PurpleForge hands you new detection rules,
+      tested against the attacks that evaded your last ones.
+    </p>
+    <div class="compare-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Capability</th>
+            <th class="pf">PurpleForge</th>
+            <th>AttackIQ</th>
+            <th>Cymulate</th>
+            <th>SafeBreach</th>
+            <th>CardinalOps</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Auto-generates detection rules on miss</td><td class="yes">✓</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td></tr>
+          <tr><td>Red adapts to Blue's active rules</td><td class="yes">✓</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">N/A</td></tr>
+          <tr><td>Sigma-native output (any SIEM)</td><td class="yes">✓</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="partial">~</td></tr>
+          <tr><td>Detection-as-code unit tests (69 tests)</td><td class="yes">✓</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td></tr>
+          <tr><td>Human review queue before rule promotion</td><td class="yes">✓</td><td class="no">N/A</td><td class="no">N/A</td><td class="no">N/A</td><td class="partial">~</td></tr>
+          <tr><td>EDR blind-spot corroboration (CrowdStrike)</td><td class="yes">✓</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td></tr>
+          <tr><td>Kill-chain timing (did attack succeed?)</td><td class="yes">✓</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td></tr>
+          <tr><td>Open source / self-hostable</td><td class="yes">✓</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td></tr>
+          <tr><td>Starting price</td><td class="yes">Free</td><td class="no">$50K+/yr</td><td class="no">$7K+/mo</td><td class="no">Custom</td><td class="no">$80K+/yr</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section id="pricing">
+  <div class="container">
+    <div class="section-label">Pricing</div>
+    <h2>Start free. Scale when you're ready.</h2>
+    <p style="color:var(--text-dim);max-width:600px;line-height:1.7;">
+      Community tier is fully functional and MIT licensed.
+      Paid tiers unlock the full production stack.
+    </p>
+    <div class="pricing-grid">
+      <!-- Community -->
+      <div class="pricing-card">
+        <div class="pricing-tier">Community</div>
+        <div class="pricing-price">$0</div>
+        <p class="pricing-desc">For security researchers, students, and teams evaluating PurpleForge.</p>
+        <ul class="pricing-list">
+          <li>6 ATT&CK techniques</li>
+          <li>Turn-based mode</li>
+          <li>Sigma rule export</li>
+          <li>ATT&CK Navigator export</li>
+          <li>MIT license — self-host forever</li>
+        </ul>
+        <a class="pricing-cta outline" href="https://github.com/jbar1125/purpleforge">Get Started on GitHub</a>
+      </div>
+      <!-- Starter -->
+      <div class="pricing-card featured">
+        <div class="pricing-badge">MOST POPULAR</div>
+        <div class="pricing-tier">Starter</div>
+        <div class="pricing-price">$1,500 <span>/ month</span></div>
+        <p class="pricing-desc">For mid-market security teams replacing annual red team engagements.</p>
+        <ul class="pricing-list">
+          <li>11 ATT&CK techniques</li>
+          <li>Real-time engine + kill-chain timing</li>
+          <li>Human review queue</li>
+          <li>MITRE Caldera integration</li>
+          <li>ATT&CK Navigator export</li>
+          <li>Email support</li>
+        </ul>
+        <a class="pricing-cta solid" href="mailto:hello@purpleforge.io?subject=Starter+Tier+Interest">Start a POC →</a>
+      </div>
+      <!-- Growth -->
+      <div class="pricing-card">
+        <div class="pricing-tier">Growth</div>
+        <div class="pricing-price">$4,500 <span>/ month</span></div>
+        <p class="pricing-desc">For mature SOC teams and MSSPs running continuous validation at scale.</p>
+        <ul class="pricing-list">
+          <li>Everything in Starter</li>
+          <li>EDR blind-spot corroboration</li>
+          <li>Custom technique templates</li>
+          <li>Multi-environment</li>
+          <li>Slack / PagerDuty alerts</li>
+          <li>99.5% uptime SLA</li>
+        </ul>
+        <a class="pricing-cta outline" href="mailto:hello@purpleforge.io?subject=Growth+Tier+Interest">Contact Sales</a>
+      </div>
+      <!-- Enterprise -->
+      <div class="pricing-card">
+        <div class="pricing-tier">Enterprise</div>
+        <div class="pricing-price">$12,000 <span>/ month</span></div>
+        <p class="pricing-desc">For large enterprises and regulated industries requiring custom deployment.</p>
+        <ul class="pricing-list">
+          <li>Everything in Growth</li>
+          <li>Multi-SIEM (Sentinel / Elastic / Chronicle)</li>
+          <li>Adversary emulation profiles</li>
+          <li>Dedicated CSM</li>
+          <li>SSO / SAML</li>
+          <li>Custom integrations + SLA</li>
+        </ul>
+        <a class="pricing-cta outline" href="mailto:hello@purpleforge.io?subject=Enterprise+Interest">Contact Sales</a>
+      </div>
+    </div>
+    <p style="text-align:center;color:var(--text-faint);font-size:0.85rem;margin-top:1.5rem;">
+      Annual plans: 20% discount. MSSP partners: 40% margin on Growth/Enterprise resale.
+    </p>
+  </div>
+</section>
+
+<!-- CTA -->
+<section>
+  <div class="container">
+    <div class="cta-section">
+      <div class="section-label">Get Started</div>
+      <h2>Start closing gaps today</h2>
+      <p>
+        Clone the repo, run <code style="background:rgba(139,92,246,0.15);padding:0.15em 0.5em;border-radius:4px;">setup_verify.py</code>,
+        and watch your ATT&CK coverage score improve in real time.
+        No agents to deploy. No vendor to negotiate with. Free.
+      </p>
+      <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;">
+        <a class="btn-primary" href="https://github.com/jbar1125/purpleforge">Clone on GitHub</a>
+        <a class="btn-secondary" href="mailto:hello@purpleforge.io">Talk to a Founder</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container" style="display:flex;flex-wrap:wrap;gap:1rem;justify-content:space-between;align-items:center;width:100%;">
+    <div>
+      <div style="font-weight:700;margin-bottom:0.3rem;">Purple<span style="color:var(--purple)">Forge</span></div>
+      <div style="color:var(--text-faint);font-size:0.8rem;">Continuous adversarial detection engineering</div>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/jbar1125/purpleforge">GitHub</a>
+      <a href="docs/business_plan.md">Business Plan</a>
+      <a href="docs/competitive_analysis.md">Competitive Analysis</a>
+      <a href="docs/PRODUCT_ROADMAP.md">Roadmap</a>
+      <a href="mailto:hello@purpleforge.io">Contact</a>
+    </div>
+    <div style="color:var(--text-faint);font-size:0.8rem;">MIT License · © 2026 PurpleForge</div>
+  </div>
+</footer>
+
+</body>
+</html>
